@@ -1040,7 +1040,7 @@ class _ObstacleDodgerState extends State<ObstacleDodger> {
     });
 
     // Start gyroscope listening
-    _gyroscopeSubscription = gyroscopeEvents.listen((GyroscopeEvent event) {
+    _gyroscopeSubscription = gyroscopeEventStream().listen((GyroscopeEvent event) {
       if (_isPlaying) {
         setState(() {
           _playerX += event.x * 5;
