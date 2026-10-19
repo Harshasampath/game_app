@@ -1,0 +1,296 @@
+import 'mission_phase.dart';
+import 'game_mission.dart';
+
+/// Campaign missions — phased levels with distinct difficulty and backdrops.
+class MissionCatalog {
+  MissionCatalog._();
+
+  static const String endlessId = 'endless';
+  static const int campaignParTimeSeconds = 150; // 2:30
+
+  static final List<GameMission> campaign = [
+    GameMission(
+      id: 'm1',
+      order: 1,
+      title: 'First Light',
+      sector: 'TRAINING SECTOR',
+      briefing: 'Training sortie — scouts only, light fire. Learn the rhythm.',
+      estimatedMinutes: 2,
+      parTimeSeconds: campaignParTimeSeconds,
+      phases: const [
+        MissionPhase(
+          name: 'Patrol Route',
+          objective: 'Clear 28 scout drones',
+          killTarget: 28,
+          maxOnScreen: 3,
+          spawnInterval: 0.88,
+          enemyBulletSpeed: 185,
+          scoutWeight: 1,
+          shootIntervalScale: 1.35,
+        ),
+        MissionPhase(
+          name: 'Crosswind',
+          objective: 'Eliminate 32 mixed hostiles',
+          killTarget: 32,
+          maxOnScreen: 3,
+          spawnInterval: 0.78,
+          enemyBulletSpeed: 198,
+          scoutWeight: 0.55,
+          weaverWeight: 0.45,
+        ),
+        MissionPhase(
+          name: 'Escort Breach',
+          objective: 'Break the escort line — 26 kills',
+          killTarget: 26,
+          maxOnScreen: 4,
+          spawnInterval: 0.72,
+          scoutWeight: 0.4,
+          weaverWeight: 0.6,
+        ),
+        MissionPhase(
+          name: 'Gatekeeper',
+          objective: 'Destroy the sector warden',
+          killTarget: 1,
+          bossOnly: true,
+          enemyBulletSpeed: 215,
+        ),
+      ],
+    ),
+    GameMission(
+      id: 'm2',
+      order: 2,
+      title: 'Fringe Patrol',
+      sector: 'OUTER RIM',
+      briefing: 'Hostile lanes — hunters join the fight. Faster spawns.',
+      estimatedMinutes: 2,
+      parTimeSeconds: campaignParTimeSeconds,
+      unlockAfterOrder: 1,
+      phases: const [
+        MissionPhase(
+          name: 'Sweep Alpha',
+          objective: 'Eliminate 30 hostiles',
+          killTarget: 30,
+          maxOnScreen: 4,
+          spawnInterval: 0.72,
+          scoutWeight: 0.45,
+          weaverWeight: 0.55,
+        ),
+        MissionPhase(
+          name: 'Sweep Beta',
+          objective: 'Clear 34 contacts',
+          killTarget: 34,
+          maxOnScreen: 4,
+          spawnInterval: 0.65,
+          enemyBulletSpeed: 228,
+          scoutWeight: 0.3,
+          weaverWeight: 0.45,
+          hunterWeight: 0.25,
+          hpBonus: 1,
+        ),
+        MissionPhase(
+          name: 'Hunter Pack',
+          objective: 'Survive hunter ambush — 28 kills',
+          killTarget: 28,
+          maxOnScreen: 5,
+          spawnInterval: 0.6,
+          enemyBulletSpeed: 242,
+          hunterWeight: 0.5,
+          weaverWeight: 0.3,
+          scoutWeight: 0.2,
+          hpBonus: 1,
+        ),
+        MissionPhase(
+          name: 'Command Node',
+          objective: 'Destroy the patrol commander',
+          killTarget: 1,
+          bossOnly: true,
+          enemyBulletSpeed: 252,
+        ),
+      ],
+    ),
+    GameMission(
+      id: 'm3',
+      order: 3,
+      title: 'Crimson Belt',
+      sector: 'CONTESTED ZONE',
+      briefing: 'Asteroid belt choke — dense waves and minefield crossfire.',
+      estimatedMinutes: 2,
+      parTimeSeconds: campaignParTimeSeconds,
+      unlockAfterOrder: 2,
+      phases: const [
+        MissionPhase(
+          name: 'Belt Entry',
+          objective: 'Clear 32 hostiles',
+          killTarget: 32,
+          maxOnScreen: 4,
+          spawnInterval: 0.62,
+          enemyBulletSpeed: 248,
+          scoutWeight: 0.3,
+          weaverWeight: 0.45,
+          hunterWeight: 0.25,
+        ),
+        MissionPhase(
+          name: 'Minefield',
+          objective: 'Navigate minefield — 36 kills',
+          killTarget: 36,
+          maxOnScreen: 5,
+          spawnInterval: 0.55,
+          enemyBulletSpeed: 262,
+          hpBonus: 1,
+        ),
+        MissionPhase(
+          name: 'Raider Wing',
+          objective: 'Crush raider wing — 30 kills',
+          killTarget: 30,
+          spawnInterval: 0.52,
+          hunterWeight: 0.45,
+          weaverWeight: 0.35,
+          scoutWeight: 0.2,
+          hpBonus: 1,
+        ),
+        MissionPhase(
+          name: 'Belt Warden',
+          objective: 'Destroy the belt warden',
+          killTarget: 1,
+          bossOnly: true,
+          enemyBulletSpeed: 272,
+          hpBonus: 2,
+        ),
+      ],
+    ),
+    GameMission(
+      id: 'm4',
+      order: 4,
+      title: 'Void Gate',
+      sector: 'DEEP VOID',
+      briefing: 'Fortified jump gate — elite packs and brutal bullet speed.',
+      estimatedMinutes: 2,
+      parTimeSeconds: campaignParTimeSeconds,
+      unlockAfterOrder: 3,
+      phases: const [
+        MissionPhase(
+          name: 'Approach',
+          objective: 'Eliminate 36 defenders',
+          killTarget: 36,
+          maxOnScreen: 5,
+          spawnInterval: 0.5,
+          enemyBulletSpeed: 268,
+          hpBonus: 1,
+        ),
+        MissionPhase(
+          name: 'Perimeter',
+          objective: 'Break perimeter — 38 kills',
+          killTarget: 38,
+          maxOnScreen: 5,
+          spawnInterval: 0.46,
+          enemyBulletSpeed: 282,
+          hunterWeight: 0.35,
+          hpBonus: 2,
+        ),
+        MissionPhase(
+          name: 'Siege',
+          objective: 'Hold the breach — 34 kills',
+          killTarget: 34,
+          spawnInterval: 0.44,
+          hunterWeight: 0.5,
+          hpBonus: 2,
+        ),
+        MissionPhase(
+          name: 'Gate Lord',
+          objective: 'Destroy the gate lord',
+          killTarget: 1,
+          bossOnly: true,
+          enemyBulletSpeed: 298,
+          hpBonus: 3,
+        ),
+      ],
+    ),
+    GameMission(
+      id: 'm5',
+      order: 5,
+      title: 'Nebula Core',
+      sector: 'NEBULA CORE',
+      briefing: 'Final assault — maximum pressure, elite hunters, relentless spawns.',
+      estimatedMinutes: 2,
+      parTimeSeconds: campaignParTimeSeconds,
+      unlockAfterOrder: 4,
+      phases: const [
+        MissionPhase(
+          name: 'Outer Shell',
+          objective: 'Punch through 38 hostiles',
+          killTarget: 38,
+          maxOnScreen: 5,
+          spawnInterval: 0.42,
+          enemyBulletSpeed: 288,
+          hpBonus: 2,
+        ),
+        MissionPhase(
+          name: 'Inner Storm',
+          objective: 'Survive elite storm — 40 kills',
+          killTarget: 40,
+          maxOnScreen: 6,
+          spawnInterval: 0.38,
+          enemyBulletSpeed: 302,
+          hunterWeight: 0.55,
+          hpBonus: 2,
+        ),
+        MissionPhase(
+          name: 'Fleet Guard',
+          objective: 'Destroy fleet guard — 36 kills',
+          killTarget: 36,
+          spawnInterval: 0.4,
+          hpBonus: 3,
+        ),
+        MissionPhase(
+          name: 'Core Breach',
+          objective: 'Breach the core — 32 kills',
+          killTarget: 32,
+          spawnInterval: 0.36,
+          enemyBulletSpeed: 315,
+          hunterWeight: 0.5,
+          hpBonus: 2,
+        ),
+        MissionPhase(
+          name: 'Core Avatar',
+          objective: 'Destroy the nebula avatar',
+          killTarget: 1,
+          bossOnly: true,
+          enemyBulletSpeed: 325,
+          hpBonus: 4,
+        ),
+      ],
+    ),
+  ];
+
+  static final GameMission endless = GameMission(
+    id: endlessId,
+    order: 99,
+    title: 'Endless Sortie',
+    sector: 'INFINITE SECTOR',
+    briefing: 'Competitive survival — difficulty escalates every wave.',
+    estimatedMinutes: 0,
+    parTimeSeconds: 0,
+    isEndless: true,
+    unlockAfterOrder: 2,
+    phases: const [
+      MissionPhase(
+        name: 'Endless',
+        objective: 'Survive and maximize score',
+        killTarget: 999999,
+        maxOnScreen: 6,
+        spawnInterval: 0.55,
+        enemyBulletSpeed: 240,
+        hunterWeight: 0.35,
+      ),
+    ],
+  );
+
+  static List<GameMission> get all => [...campaign, endless];
+
+  static GameMission? byId(String id) {
+    for (final m in all) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
+}

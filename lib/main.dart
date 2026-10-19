@@ -3,9 +3,10 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:game_app/screens/game_screen.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:game_app/games/nebula_strike/nebula_strike_screen.dart';
+import 'package:game_app/games/shuffle_dice/shuffle_dice_screen.dart';
 
 void main() {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -36,13 +37,62 @@ class GamesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final games = [
-      {'name': 'Tic Tac Toe', 'widget': const TicTacToeGame()},
-      {'name': 'Memory Cards', 'widget': const MemoryGame()},
-      {'name': 'Number Puzzels', 'widget': const NumberPuzzleGame()},
-      {'name': 'Word Scramble', 'widget': const WordScrambleGame()},
-      {'name': 'Color Memory Matching', 'widget': const ColorMemoryGame()},
-      {'name': 'Obstacle Dodger', 'widget': const ObstacleDodger()},
-      {'name': 'Bubble Shooter Game', 'widget': const BubbleShooterGame()},
+      {
+        'name': 'Shuffle Dice',
+        'badge': 'FOOD CHALLENGE',
+        'icon': Icons.casino_rounded,
+        'colors': [const Color(0xFFD90429), const Color(0xFFFF8500), const Color(0xFFFFB703)],
+        'widget': const ShuffleDiceScreen(),
+      },
+      {
+        'name': 'Nebula Strike',
+        'badge': 'ARCADE • 2D',
+        'icon': Icons.rocket_launch_rounded,
+        'colors': [const Color(0xFF060A14), const Color(0xFF1E3A8A), const Color(0xFF38BDF8)],
+        'widget': const NebulaStrikeScreen(),
+      },
+      {
+        'name': 'Tic Tac Toe',
+        'icon': Icons.grid_3x3_rounded,
+        'colors': [Colors.indigo.shade400, Colors.indigo.shade700],
+        'widget': const TicTacToeGame(),
+      },
+      {
+        'name': 'Memory Cards',
+        'icon': Icons.style_rounded,
+        'colors': [Colors.teal.shade400, Colors.teal.shade700],
+        'widget': const MemoryGame(),
+      },
+      {
+        'name': 'Number Puzzles',
+        'icon': Icons.pin_rounded,
+        'colors': [Colors.purple.shade400, Colors.purple.shade700],
+        'widget': const NumberPuzzleGame(),
+      },
+      {
+        'name': 'Word Scramble',
+        'icon': Icons.spellcheck_rounded,
+        'colors': [Colors.amber.shade700, Colors.deepOrange.shade600],
+        'widget': const WordScrambleGame(),
+      },
+      {
+        'name': 'Color Memory Matching',
+        'icon': Icons.palette_rounded,
+        'colors': [Colors.pink.shade400, const Color(0xFFBE185D)],
+        'widget': const ColorMemoryGame(),
+      },
+      {
+        'name': 'Obstacle Dodger',
+        'icon': Icons.directions_car_rounded,
+        'colors': [Colors.blue.shade500, Colors.blue.shade800],
+        'widget': const ObstacleDodger(),
+      },
+      {
+        'name': 'Bubble Shooter Game',
+        'icon': Icons.bubble_chart_rounded,
+        'colors': [Colors.cyan.shade500, Colors.cyan.shade800],
+        'widget': const BubbleShooterGame(),
+      },
     ];
 
     return Scaffold(
@@ -58,11 +108,15 @@ class GamesList extends StatelessWidget {
         ),
         itemCount: games.length,
         itemBuilder: (context, index) {
+          final game = games[index];
           return GameCard(
-            title: games[index]['name'] as String,
+            title: game['name'] as String,
+            icon: game['icon'] as IconData?,
+            badge: game['badge'] as String?,
+            gradientColors: game['colors'] as List<Color>?,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => games[index]['widget'] as Widget),
+              MaterialPageRoute(builder: (context) => game['widget'] as Widget),
             ),
           );
         },
@@ -74,39 +128,73 @@ class GamesList extends StatelessWidget {
 class GameCard extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
+  final IconData? icon;
+  final String? badge;
+  final List<Color>? gradientColors;
 
   const GameCard({
     Key? key,
     required this.title,
     required this.onTap,
+    this.icon,
+    this.badge,
+    this.gradientColors,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
             gradient: LinearGradient(
-              colors: [Colors.blue.shade300, Colors.blue.shade600],
+              colors: gradientColors ?? [Colors.blue.shade300, Colors.blue.shade600],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
-          child: Center(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 36, color: Colors.white),
+                const SizedBox(height: 8),
+              ],
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
+              if (badge != null) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white30, width: 0.8),
+                  ),
+                  child: Text(
+                    badge!,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -858,6 +946,7 @@ class _ColorMemoryGameState extends State<ColorMemoryGame> {
   late List<Color?> _userChoices; // User's selected colors
   bool _isShowingColors = true; // Controls whether colors are shown or hidden
   int _score = 0;
+  Timer? _hideTimer;
 
   @override
   void initState() {
@@ -865,7 +954,14 @@ class _ColorMemoryGameState extends State<ColorMemoryGame> {
     _startNewGame();
   }
 
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
+
   void _startNewGame() {
+    _hideTimer?.cancel();
     setState(() {
       _randomColors = (_allColors.toList()..shuffle()).sublist(0, 4);
       _userChoices = List<Color?>.filled(4, null);
@@ -874,7 +970,8 @@ class _ColorMemoryGameState extends State<ColorMemoryGame> {
     });
 
     // Hide the colors after a delay of 3 seconds
-    Timer(const Duration(seconds: 3), () {
+    _hideTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
       setState(() {
         _isShowingColors = false;
       });
@@ -996,9 +1093,10 @@ class _ObstacleDodgerState extends State<ObstacleDodger> {
   static const obstacleWidth = 60.0;
   static const obstacleGap = 200.0;
 
-  late double _playerX;
-  late double _screenWidth;
-  late double _screenHeight;
+  double _playerX = 0;
+  double _screenWidth = 0;
+  double _screenHeight = 0;
+  bool _initialized = false;
 
   List<Obstacle> _obstacles = [];
   Timer? _gameTimer;
@@ -1015,15 +1113,19 @@ class _ObstacleDodgerState extends State<ObstacleDodger> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _screenWidth = MediaQuery.of(context).size.width;
-      _screenHeight = MediaQuery.of(context).size.height;
-      _playerX = _screenWidth / 2 - playerSize / 2;
-      setState(() {});
+      if (!mounted) return;
+      final size = MediaQuery.of(context).size;
+      setState(() {
+        _screenWidth = size.width;
+        _screenHeight = size.height;
+        _playerX = _screenWidth / 2 - playerSize / 2;
+        _initialized = true;
+      });
     });
   }
 
   void _startGame() {
-    if (_isPlaying) return;
+    if (_isPlaying || !_initialized) return;
 
     setState(() {
       _isPlaying = true;
@@ -1036,16 +1138,21 @@ class _ObstacleDodgerState extends State<ObstacleDodger> {
 
     // Start game loop
     _gameTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       _updateGame();
     });
 
     // Start gyroscope listening
     _gyroscopeSubscription = gyroscopeEventStream().listen((GyroscopeEvent event) {
-      if (_isPlaying) {
+      if (!mounted) return;
+      if (_isPlaying && _initialized) {
         setState(() {
           _playerX += event.x * 5;
           // Keep player within bounds
-          _playerX = _playerX.clamp(0, _screenWidth - playerSize);
+          _playerX = _playerX.clamp(0, (_screenWidth - playerSize).clamp(0, double.infinity));
         });
       }
     });
@@ -1119,10 +1226,10 @@ class _ObstacleDodgerState extends State<ObstacleDodger> {
     return Scaffold(
       body: GestureDetector(
         onHorizontalDragUpdate: (details) {
-          if (_isPlaying) {
+          if (_isPlaying && _initialized) {
             setState(() {
               _playerX += details.delta.dx;
-              _playerX = _playerX.clamp(0, _screenWidth - playerSize);
+              _playerX = _playerX.clamp(0, (_screenWidth - playerSize).clamp(0, double.infinity));
             });
           }
         },
@@ -1144,7 +1251,7 @@ class _ObstacleDodgerState extends State<ObstacleDodger> {
               ),
 
               // Obstacles
-              if (_screenWidth != null)
+              if (_initialized)
                 ..._obstacles.map((obstacle) => Positioned(
                       left: obstacle.x,
                       top: obstacle.y,
@@ -1159,7 +1266,7 @@ class _ObstacleDodgerState extends State<ObstacleDodger> {
                     )),
 
               // Player
-              if (_screenWidth != null)
+              if (_initialized)
                 Positioned(
                   left: _playerX,
                   bottom: 50,
