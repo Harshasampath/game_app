@@ -633,6 +633,9 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
                     tooltip: 'Back to Games',
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    padding: const EdgeInsets.all(6),
                   ),
                   if (_voiceCommandEnabled) ...[
                     const SizedBox(width: 4),
@@ -647,91 +650,111 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                       },
                     ),
                   ],
-                  const Spacer(),
-                  // Eye Toggle (Clean Screen Mode: Hide text/banners/tips)
-                  IconButton(
-                    onPressed: () {
-                      setState(() => _cleanMode = !_cleanMode);
-                    },
-                    icon: Icon(
-                      _cleanMode
-                          ? Icons.visibility_off_rounded
-                          : Icons.visibility_rounded,
-                      color: _cleanMode ? const Color(0xFFFFB74D) : Colors.white,
-                    ),
-                    tooltip: _cleanMode
-                        ? 'Exit Clean Screen Mode'
-                        : 'Clean Screen Mode (Hide All Text)',
-                  ),
-                  // Gear Icon (Dice Controls & Settings)
-                  IconButton(
-                    onPressed: _openDiceSettings,
-                    icon: const Icon(Icons.settings_rounded, color: Colors.white),
-                    tooltip: 'Dice Settings',
-                  ),
-                  if (!_cleanMode) ...[
-                    // Food Challenge Toggle
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: _openFoodChallengeCustomizer,
-                        child: Container(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: _foodChallengeEnabled
-                                ? const Color(0xFFFF5722).withValues(alpha: 0.22)
-                                : Colors.white10,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: _foodChallengeEnabled
-                                  ? const Color(0xFFFF5722)
-                                  : Colors.white24,
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Eye Toggle (Clean Screen Mode: Hide text/banners/tips)
+                          IconButton(
+                            onPressed: () {
+                              setState(() => _cleanMode = !_cleanMode);
+                            },
+                            icon: Icon(
+                              _cleanMode
+                                  ? Icons.visibility_off_rounded
+                                  : Icons.visibility_rounded,
+                              color: _cleanMode ? const Color(0xFFFFB74D) : Colors.white,
+                              size: 22,
                             ),
+                            tooltip: _cleanMode
+                                ? 'Exit Clean Screen Mode'
+                                : 'Clean Screen Mode (Hide All Text)',
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                            padding: const EdgeInsets.all(6),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('🍕', style: TextStyle(fontSize: 14)),
-                              const SizedBox(width: 6),
-                              Text(
-                                _foodChallengeEnabled
-                                    ? 'FOOD CHALLENGE'
-                                    : 'NORMAL MODE',
-                                style: TextStyle(
-                                  color: _foodChallengeEnabled
-                                      ? const Color(0xFFFF7043)
-                                      : Colors.white70,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                  letterSpacing: 1,
+                          // Gear Icon (Dice Controls & Settings)
+                          IconButton(
+                            onPressed: _openDiceSettings,
+                            icon: const Icon(Icons.settings_rounded, color: Colors.white, size: 22),
+                            tooltip: 'Dice Settings',
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                            padding: const EdgeInsets.all(6),
+                          ),
+                          if (!_cleanMode) ...[
+                            const SizedBox(width: 2),
+                            // Food Challenge Toggle
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: _openFoodChallengeCustomizer,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: _foodChallengeEnabled
+                                        ? const Color(0xFFFF5722).withValues(alpha: 0.22)
+                                        : Colors.white10,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: _foodChallengeEnabled
+                                          ? const Color(0xFFFF5722)
+                                          : Colors.white24,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text('🍕', style: TextStyle(fontSize: 13)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _foodChallengeEnabled ? 'CHALLENGE' : 'NORMAL',
+                                        style: TextStyle(
+                                          color: _foodChallengeEnabled
+                                              ? const Color(0xFFFF7043)
+                                              : Colors.white70,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10.5,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      const Icon(Icons.keyboard_arrow_down,
+                                          size: 14, color: Colors.white70),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.keyboard_arrow_down,
-                                  size: 16, color: Colors.white70),
-                            ],
-                          ),
-                        ),
+                            ),
+                            const SizedBox(width: 4),
+                            // Speed selector toggle button
+                            _SpeedButton(
+                              current: _shuffleSpeed,
+                              isOpen: _showSpeedSelector,
+                              onTap: () =>
+                                  setState(() => _showSpeedSelector = !_showSpeedSelector),
+                            ),
+                            const SizedBox(width: 2),
+                            // Theme Customizer
+                            IconButton(
+                              onPressed: _openThemeCustomizer,
+                              icon: const Icon(Icons.palette_rounded, color: Colors.white, size: 22),
+                              tooltip: 'Customize Theme & Colors',
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                              padding: const EdgeInsets.all(6),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    // Speed selector toggle button
-                    _SpeedButton(
-                      current: _shuffleSpeed,
-                      isOpen: _showSpeedSelector,
-                      onTap: () =>
-                          setState(() => _showSpeedSelector = !_showSpeedSelector),
-                    ),
-                    // Theme Customizer
-                    IconButton(
-                      onPressed: _openThemeCustomizer,
-                      icon:
-                          const Icon(Icons.palette_outlined, color: Colors.white),
-                      tooltip: 'Customize Theme & Colors',
-                    ),
-                  ],
+                  ),
                 ],
               ),
             ),
