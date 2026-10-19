@@ -28,12 +28,18 @@ class DiceSettings {
   final ShuffleSpeed shuffleSpeed;
   final bool foodChallengeEnabled;
   final Map<int, String> foodRules;
+  final bool soundEnabled;
+  final bool vibrateOnStop;
+  final bool voiceCommandEnabled;
 
   const DiceSettings({
     required this.theme,
     required this.shuffleSpeed,
     required this.foodChallengeEnabled,
     required this.foodRules,
+    this.soundEnabled = true,
+    this.vibrateOnStop = true,
+    this.voiceCommandEnabled = false,
   });
 
   static DiceSettings defaults() {
@@ -42,6 +48,9 @@ class DiceSettings {
       shuffleSpeed: ShuffleSpeed.normal,
       foodChallengeEnabled: true,
       foodRules: Map.from(FoodChallengePreset.presets[0].rules),
+      soundEnabled: true,
+      vibrateOnStop: true,
+      voiceCommandEnabled: false,
     );
   }
 }
@@ -54,6 +63,9 @@ class DiceSettingsService {
   static const String _kSpeedKey = 'shuffle_dice_speed_mode';
   static const String _kFoodEnabledKey = 'shuffle_dice_food_enabled';
   static const String _kFoodRulesKey = 'shuffle_dice_food_rules_map';
+  static const String _kSoundEnabledKey = 'shuffle_dice_sound_enabled';
+  static const String _kVibrateStopKey = 'shuffle_dice_vibrate_stop_enabled';
+  static const String _kVoiceCommandKey = 'shuffle_dice_voice_command_enabled';
 
   /// Load all settings at once on startup
   static Future<DiceSettings> loadSettings() async {
@@ -85,6 +97,11 @@ class DiceSettingsService {
       // Food Challenge Enabled
       final foodEnabled = prefs.getBool(_kFoodEnabledKey) ?? true;
 
+      // Sound, Vibrate, Voice Command
+      final soundEnabled = prefs.getBool(_kSoundEnabledKey) ?? true;
+      final vibrateStop = prefs.getBool(_kVibrateStopKey) ?? true;
+      final voiceCommand = prefs.getBool(_kVoiceCommandKey) ?? false;
+
       // Food Challenge Rules
       Map<int, String> rules = Map.from(FoodChallengePreset.presets[0].rules);
       final rulesStr = prefs.getString(_kFoodRulesKey);
@@ -109,6 +126,9 @@ class DiceSettingsService {
         shuffleSpeed: speed,
         foodChallengeEnabled: foodEnabled,
         foodRules: rules,
+        soundEnabled: soundEnabled,
+        vibrateOnStop: vibrateStop,
+        voiceCommandEnabled: voiceCommand,
       );
     } catch (_) {
       return DiceSettings.defaults();
@@ -136,6 +156,30 @@ class DiceSettingsService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kFoodEnabledKey, enabled);
+    } catch (_) {}
+  }
+
+  /// Save whether sound is enabled
+  static Future<void> saveSoundEnabled(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kSoundEnabledKey, enabled);
+    } catch (_) {}
+  }
+
+  /// Save whether vibrate on stop is enabled
+  static Future<void> saveVibrateOnStop(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kVibrateStopKey, enabled);
+    } catch (_) {}
+  }
+
+  /// Save whether voice command rolling is enabled
+  static Future<void> saveVoiceCommandEnabled(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kVoiceCommandKey, enabled);
     } catch (_) {}
   }
 

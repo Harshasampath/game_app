@@ -21,6 +21,8 @@ class MiniGamesApp extends StatelessWidget {
   Widget build(BuildContext context) {
     FlutterNativeSplash.remove();
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      debugShowMaterialGrid: false,
       title: 'Mini Games Collection',
       theme: ThemeData(
         primarySwatch: Colors.blue,

@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flame_audio/flame_audio.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import 'models/dice_theme.dart';
 import 'models/food_challenge.dart';
 import 'models/glb_dice_loader.dart';
 import 'services/dice_settings_service.dart';
+import 'widgets/dice_settings_sheet.dart';
 import 'widgets/dice_widget.dart';
 import 'widgets/food_challenge_sheet.dart';
 import 'widgets/theme_picker_sheet.dart';
@@ -30,6 +32,18 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
   int _currentValue = 1;
   int _targetValue = 1;
   bool _isRolling = false;
+
+  // ── Settings (Sound, Vibration, Voice, Clean Screen Mode) ───────────────────
+  bool _soundEnabled = true;
+  bool _vibrateOnStop = true;
+  bool _voiceCommandEnabled = false;
+  bool _cleanMode = false;
+
+  // ── Voice Command Recognition ───────────────────────────────────────────────
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechAvailable = false;
+  bool _isListening = false;
+  Timer? _voiceRestartTimer;
 
   // ── Theme & Customization ───────────────────────────────────────────────────
   DiceThemeData _theme = DiceThemeData.presets[0];
@@ -117,12 +131,98 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       _shuffleSpeed = settings.shuffleSpeed;
       _foodChallengeEnabled = settings.foodChallengeEnabled;
       _foodRules = settings.foodRules;
+      _soundEnabled = settings.soundEnabled;
+      _vibrateOnStop = settings.vibrateOnStop;
+      _voiceCommandEnabled = settings.voiceCommandEnabled;
       _updateChallengeResult(_currentValue);
     });
+
+    if (_voiceCommandEnabled) {
+      _initAndStartVoice();
+    }
+  }
+
+  // ── Voice Commands ──────────────────────────────────────────────────────────
+
+  Future<void> _initAndStartVoice() async {
+    try {
+      if (!_speechAvailable) {
+        _speechAvailable = await _speech.initialize(
+          onStatus: _onSpeechStatus,
+          onError: (_) {
+            if (mounted) setState(() => _isListening = false);
+          },
+        );
+      }
+      if (_speechAvailable && mounted && _voiceCommandEnabled && !_isRolling) {
+        _startListening();
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isListening = false);
+    }
+  }
+
+  void _startListening() {
+    if (!_speechAvailable || !_voiceCommandEnabled || _isRolling || !mounted) return;
+    try {
+      _speech.listen(
+        onResult: (result) {
+          final words = result.recognizedWords.toLowerCase().trim();
+          if (words.contains('roll') ||
+              words.contains('dice') ||
+              words.contains('shake') ||
+              words.contains('spin') ||
+              words.contains('toss') ||
+              words.contains('throw') ||
+              words.contains('go') ||
+              words.contains('start') ||
+              words.contains('shuffle')) {
+            _rollDice(intensityBoost: 1.25, gestureType: 'Voice ("$words")');
+          }
+        },
+        listenOptions: stt.SpeechListenOptions(
+          listenMode: stt.ListenMode.confirmation,
+          cancelOnError: false,
+          partialResults: true,
+        ),
+      );
+      if (mounted) setState(() => _isListening = true);
+    } catch (_) {
+      if (mounted) setState(() => _isListening = false);
+    }
+  }
+
+  void _onSpeechStatus(String status) {
+    if (!mounted) return;
+    if (status == 'listening') {
+      setState(() => _isListening = true);
+    } else if (status == 'notListening' || status == 'done') {
+      setState(() => _isListening = false);
+      if (_voiceCommandEnabled && !_isRolling) {
+        _voiceRestartTimer?.cancel();
+        _voiceRestartTimer = Timer(const Duration(milliseconds: 600), () {
+          if (_voiceCommandEnabled && !_isRolling && mounted) {
+            _startListening();
+          }
+        });
+      }
+    }
+  }
+
+  void _stopVoiceListening() {
+    _voiceRestartTimer?.cancel();
+    try {
+      _speech.stop();
+    } catch (_) {}
+    if (mounted) setState(() => _isListening = false);
   }
 
   @override
   void dispose() {
+    _voiceRestartTimer?.cancel();
+    try {
+      _speech.stop();
+    } catch (_) {}
     _tickTimer?.cancel();
     _sensorSubscription?.cancel();
     _scaleController.dispose();
@@ -219,9 +319,19 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     String gestureType = 'Tap',
   }) {
     if (_isRolling) return;
-    try {
-      FlameAudio.play('dice_rolling.wav');
-    } catch (_) {}
+
+    if (_isListening) {
+      try {
+        _speech.stop();
+      } catch (_) {}
+      setState(() => _isListening = false);
+    }
+
+    if (_soundEnabled) {
+      try {
+        FlameAudio.play('dice_rolling.wav');
+      } catch (_) {}
+    }
 
     _targetValue = _random.nextInt(6) + 1;
     _isRolling = true;
@@ -278,7 +388,9 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
 
     // ── Haptics ────────────────────────────────────────────────────────────
     if (isLastTick) {
-      HapticFeedback.heavyImpact();
+      if (_vibrateOnStop) {
+        HapticFeedback.heavyImpact();
+      }
     } else if (progress < 0.4) {
       // rapid phase: fast haptic clicks
       HapticFeedback.selectionClick();
@@ -295,6 +407,14 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       });
       _scaleController.forward(from: 0);
       _updateChallengeResult(_targetValue);
+
+      if (_voiceCommandEnabled) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted && _voiceCommandEnabled && !_isRolling) {
+            _startListening();
+          }
+        });
+      }
     } else {
       // ── Decelerate: interval grows with smooth easing ───────
       // Use Flutter's easeOutCubic curve for smoother timing
@@ -307,6 +427,50 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
   }
 
   // ── Modals ──────────────────────────────────────────────────────────────────
+
+  void _openDiceSettings() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return DiceSettingsSheet(
+            soundEnabled: _soundEnabled,
+            onSoundChanged: (val) {
+              setSheetState(() => _soundEnabled = val);
+              setState(() => _soundEnabled = val);
+              DiceSettingsService.saveSoundEnabled(val);
+            },
+            vibrateOnStop: _vibrateOnStop,
+            onVibrateChanged: (val) {
+              setSheetState(() => _vibrateOnStop = val);
+              setState(() => _vibrateOnStop = val);
+              DiceSettingsService.saveVibrateOnStop(val);
+            },
+            voiceCommandEnabled: _voiceCommandEnabled,
+            isVoiceListening: _isListening,
+            onVoiceCommandChanged: (val) {
+              setSheetState(() => _voiceCommandEnabled = val);
+              setState(() => _voiceCommandEnabled = val);
+              DiceSettingsService.saveVoiceCommandEnabled(val);
+              if (val) {
+                _initAndStartVoice();
+              } else {
+                _stopVoiceListening();
+              }
+            },
+            cleanMode: _cleanMode,
+            onCleanModeChanged: (val) {
+              setSheetState(() => _cleanMode = val);
+              setState(() => _cleanMode = val);
+            },
+            accentColor: _theme.accentColor,
+          );
+        },
+      ),
+    );
+  }
 
   void _openThemeCustomizer() {
     showModalBottomSheet(
@@ -401,7 +565,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       // Food Challenge Banner
-                      if (_foodChallengeEnabled && _lastChallengeResult != null)
+                      if (!_cleanMode && _foodChallengeEnabled && _lastChallengeResult != null)
                         _FoodChallengeBanner(
                           value: _currentValue,
                           result: _lastChallengeResult!,
@@ -423,33 +587,35 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                         ),
                       ),
 
-                      const SizedBox(height: 36),
+                      if (!_cleanMode) ...[
+                        const SizedBox(height: 36),
 
-                      // Status badge
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _isRolling
-                              ? _theme.accentColor.withValues(alpha: 0.18)
-                              : Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                              color: _isRolling
-                                  ? _theme.accentColor.withValues(alpha: 0.5)
-                                  : Colors.white12),
-                        ),
-                        child: Text(
-                          _isRolling ? 'SHUFFLING...' : 'ROLLED  •  $_currentValue',
-                          style: TextStyle(
-                            color: _isRolling ? _theme.accentColor : Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 2.5,
+                        // Status badge
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _isRolling
+                                ? _theme.accentColor.withValues(alpha: 0.18)
+                                : Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                                color: _isRolling
+                                    ? _theme.accentColor.withValues(alpha: 0.5)
+                                    : Colors.white12),
+                          ),
+                          child: Text(
+                            _isRolling ? 'SHUFFLING...' : 'ROLLED  •  $_currentValue',
+                            style: TextStyle(
+                              color: _isRolling ? _theme.accentColor : Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 2.5,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -468,74 +634,110 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                     icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
                     tooltip: 'Back to Games',
                   ),
+                  if (_voiceCommandEnabled) ...[
+                    const SizedBox(width: 4),
+                    _VoiceStatusPill(
+                      isListening: _isListening,
+                      onTap: () {
+                        if (_isListening) {
+                          _stopVoiceListening();
+                        } else {
+                          _startListening();
+                        }
+                      },
+                    ),
+                  ],
                   const Spacer(),
-                  // Food Challenge Toggle
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: _openFoodChallengeCustomizer,
-                      child: Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _foodChallengeEnabled
-                              ? const Color(0xFFFF5722).withValues(alpha: 0.22)
-                              : Colors.white10,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
+                  // Eye Toggle (Clean Screen Mode: Hide text/banners/tips)
+                  IconButton(
+                    onPressed: () {
+                      setState(() => _cleanMode = !_cleanMode);
+                    },
+                    icon: Icon(
+                      _cleanMode
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
+                      color: _cleanMode ? const Color(0xFFFFB74D) : Colors.white,
+                    ),
+                    tooltip: _cleanMode
+                        ? 'Exit Clean Screen Mode'
+                        : 'Clean Screen Mode (Hide All Text)',
+                  ),
+                  // Gear Icon (Dice Controls & Settings)
+                  IconButton(
+                    onPressed: _openDiceSettings,
+                    icon: const Icon(Icons.settings_rounded, color: Colors.white),
+                    tooltip: 'Dice Settings',
+                  ),
+                  if (!_cleanMode) ...[
+                    // Food Challenge Toggle
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: _openFoodChallengeCustomizer,
+                        child: Container(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
                             color: _foodChallengeEnabled
-                                ? const Color(0xFFFF5722)
-                                : Colors.white24,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('🍕', style: TextStyle(fontSize: 14)),
-                            const SizedBox(width: 6),
-                            Text(
-                              _foodChallengeEnabled
-                                  ? 'FOOD CHALLENGE'
-                                  : 'NORMAL MODE',
-                              style: TextStyle(
-                                color: _foodChallengeEnabled
-                                    ? const Color(0xFFFF7043)
-                                    : Colors.white70,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                                letterSpacing: 1,
-                              ),
+                                ? const Color(0xFFFF5722).withValues(alpha: 0.22)
+                                : Colors.white10,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: _foodChallengeEnabled
+                                  ? const Color(0xFFFF5722)
+                                  : Colors.white24,
                             ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.keyboard_arrow_down,
-                                size: 16, color: Colors.white70),
-                          ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('🍕', style: TextStyle(fontSize: 14)),
+                              const SizedBox(width: 6),
+                              Text(
+                                _foodChallengeEnabled
+                                    ? 'FOOD CHALLENGE'
+                                    : 'NORMAL MODE',
+                                style: TextStyle(
+                                  color: _foodChallengeEnabled
+                                      ? const Color(0xFFFF7043)
+                                      : Colors.white70,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.keyboard_arrow_down,
+                                  size: 16, color: Colors.white70),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  // Speed selector toggle button
-                  _SpeedButton(
-                    current: _shuffleSpeed,
-                    isOpen: _showSpeedSelector,
-                    onTap: () =>
-                        setState(() => _showSpeedSelector = !_showSpeedSelector),
-                  ),
-                  // Theme Customizer
-                  IconButton(
-                    onPressed: _openThemeCustomizer,
-                    icon:
-                        const Icon(Icons.palette_outlined, color: Colors.white),
-                    tooltip: 'Customize Theme & Colors',
-                  ),
+                    const SizedBox(width: 6),
+                    // Speed selector toggle button
+                    _SpeedButton(
+                      current: _shuffleSpeed,
+                      isOpen: _showSpeedSelector,
+                      onTap: () =>
+                          setState(() => _showSpeedSelector = !_showSpeedSelector),
+                    ),
+                    // Theme Customizer
+                    IconButton(
+                      onPressed: _openThemeCustomizer,
+                      icon:
+                          const Icon(Icons.palette_outlined, color: Colors.white),
+                      tooltip: 'Customize Theme & Colors',
+                    ),
+                  ],
                 ],
               ),
             ),
 
             // ── Speed Selector Panel ─────────────────────────────────────────
-            if (_showSpeedSelector)
+            if (!_cleanMode && _showSpeedSelector)
               Positioned(
                 top: 70,
                 right: 12,
@@ -552,39 +754,40 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
               ),
 
             // ── Bottom Gesture Tips ───────────────────────────────────────────
-            Positioned(
-              bottom: 16,
-              left: 20,
-              right: 20,
-              child: IgnorePointer(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      const _GestureTip(
-                          icon: Icons.touch_app_outlined, label: 'Tap'),
-                      const _GestureTip(icon: Icons.gesture, label: 'Swipe'),
-                      const _GestureTip(
-                          icon: Icons.double_arrow, label: '2x Tap'),
-                      const _GestureTip(
-                          icon: Icons.vibration, label: 'Shake'),
-                      _GestureTip(
-                        icon: _shuffleSpeed.icon,
-                        label: _shuffleSpeed.label,
-                        color: _speedColor(_shuffleSpeed),
-                      ),
-                    ],
+            if (!_cleanMode)
+              Positioned(
+                bottom: 16,
+                left: 20,
+                right: 20,
+                child: IgnorePointer(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        const _GestureTip(
+                            icon: Icons.touch_app_outlined, label: 'Tap'),
+                        const _GestureTip(icon: Icons.gesture, label: 'Swipe'),
+                        const _GestureTip(
+                            icon: Icons.double_arrow, label: '2x Tap'),
+                        const _GestureTip(
+                            icon: Icons.vibration, label: 'Shake'),
+                        _GestureTip(
+                          icon: _shuffleSpeed.icon,
+                          label: _shuffleSpeed.label,
+                          color: _speedColor(_shuffleSpeed),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -942,3 +1145,59 @@ class _GestureTip extends StatelessWidget {
     );
   }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Voice Status Pill
+// ──────────────────────────────────────────────────────────────────────────────
+
+class _VoiceStatusPill extends StatelessWidget {
+  final bool isListening;
+  final VoidCallback onTap;
+
+  const _VoiceStatusPill({
+    required this.isListening,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isListening
+              ? const Color(0xFFFF5252).withValues(alpha: 0.22)
+              : Colors.white10,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isListening ? const Color(0xFFFF5252) : Colors.white24,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isListening ? Icons.mic_rounded : Icons.mic_off_rounded,
+              size: 14,
+              color: isListening ? const Color(0xFFFF5252) : Colors.white60,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              isListening ? 'SAY "ROLL"' : 'MIC PAUSED',
+              style: TextStyle(
+                color: isListening ? const Color(0xFFFF8A80) : Colors.white60,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
