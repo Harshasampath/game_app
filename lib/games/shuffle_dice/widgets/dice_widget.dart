@@ -345,8 +345,8 @@ class _GlbDicePainter extends CustomPainter {
     final frontHalf = (size.width * 0.38) * (fl / (fl - (size.width * 0.38)));
     final diceRect = Rect.fromCenter(
       center: Offset(cx, cy),
-      width: frontHalf * 2,
-      height: frontHalf * 2,
+      width: frontHalf * 1.8,
+      height: frontHalf * 1.8,
     );
     final rrect = RRect.fromRectAndRadius(
       diceRect,

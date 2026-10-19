@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flame_audio/flame_audio.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import 'models/dice_theme.dart';
@@ -24,7 +25,7 @@ class ShuffleDiceScreen extends StatefulWidget {
 }
 
 class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // ── Dice State ──────────────────────────────────────────────────────────────
   int _currentValue = 1;
   int _targetValue = 1;
@@ -74,6 +75,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
   // ── For spring-back scale ───────────────────────────────────────────────────
   late final AnimationController _scaleController;
   late final Animation<double> _scaleAnim;
+  late final AnimationController _stopRotController;
 
   @override
   void initState() {
@@ -87,6 +89,11 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       vsync: this,
       duration: const Duration(milliseconds: 450),
     );
+    // Controller for smooth rotation reset when dice lands
+    _stopRotController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _scaleAnim = CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut);
     _scaleAnim.addListener(() {
       if (!mounted) return;
@@ -99,6 +106,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     _initShakeDetector();
     _loadSavedSettings();
     GlbDiceLoader.load();
+    FlameAudio.audioCache.load('dice_rolling.wav').ignore();
   }
 
   Future<void> _loadSavedSettings() async {
@@ -118,6 +126,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     _tickTimer?.cancel();
     _sensorSubscription?.cancel();
     _scaleController.dispose();
+    _stopRotController.dispose();
     super.dispose();
   }
 
@@ -210,6 +219,9 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     String gestureType = 'Tap',
   }) {
     if (_isRolling) return;
+    try {
+      FlameAudio.play('dice_rolling.wav');
+    } catch (_) {}
 
     _targetValue = _random.nextInt(6) + 1;
     _isRolling = true;
@@ -284,9 +296,9 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       _scaleController.forward(from: 0);
       _updateChallengeResult(_targetValue);
     } else {
-      // ── Decelerate: interval grows exponentially toward targetTickMs ───────
-      // easeOut curve: interval = start + (end-start) * progress^1.6
-      final eased = math.pow(progress, 1.6);
+      // ── Decelerate: interval grows with smooth easing ───────
+      // Use Flutter's easeOutCubic curve for smoother timing
+      final eased = Curves.easeOutCubic.transform(progress);
       _currentTickMs =
           _currentTickMs + (_targetTickMs - _currentTickMs) * eased * 0.35;
 
