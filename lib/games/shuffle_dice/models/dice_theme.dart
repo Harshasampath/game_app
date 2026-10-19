@@ -43,6 +43,32 @@ class DiceThemeData {
     );
   }
 
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'dieColor': dieColor.toARGB32(),
+      'dotColor': dotColor.toARGB32(),
+      'backgroundColor': backgroundColor.toARGB32(),
+      'accentColor': accentColor.toARGB32(),
+      'borderColor': borderColor?.toARGB32(),
+      'borderRadius': borderRadius,
+      'hasGlow': hasGlow,
+    };
+  }
+
+  factory DiceThemeData.fromMap(Map<String, dynamic> map) {
+    return DiceThemeData(
+      name: map['name'] as String? ?? 'Custom',
+      dieColor: Color(map['dieColor'] as int? ?? 0xFF1E222D),
+      dotColor: Color(map['dotColor'] as int? ?? 0xFFFFD166),
+      backgroundColor: Color(map['backgroundColor'] as int? ?? 0xFF0D0F14),
+      accentColor: Color(map['accentColor'] as int? ?? 0xFFFFD166),
+      borderColor: map['borderColor'] != null ? Color(map['borderColor'] as int) : null,
+      borderRadius: (map['borderRadius'] as num?)?.toDouble() ?? 28.0,
+      hasGlow: map['hasGlow'] as bool? ?? false,
+    );
+  }
+
   static const List<DiceThemeData> presets = [
     DiceThemeData(
       name: 'Midnight Gold',
