@@ -6,6 +6,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 
 import 'models/dice_theme.dart';
 import 'models/food_challenge.dart';
+import 'models/glb_dice_loader.dart';
 import 'services/dice_settings_service.dart';
 import 'widgets/dice_widget.dart';
 import 'widgets/food_challenge_sheet.dart';
@@ -97,6 +98,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
 
     _initShakeDetector();
     _loadSavedSettings();
+    GlbDiceLoader.load();
   }
 
   Future<void> _loadSavedSettings() async {
@@ -341,7 +343,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final diceDimension =
-        (math.min(screenSize.width, screenSize.height) * 0.68).clamp(240.0, 340.0);
+        (math.min(screenSize.width, screenSize.height) * 0.85).clamp(240.0, 340.0);
 
     return Scaffold(
       backgroundColor: _theme.backgroundColor,
@@ -405,6 +407,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                           rotationY: _rotY,
                           rotationZ: _rotZ,
                           elevation: _isRolling ? 32.0 : 16.0,
+                          isRolling: _isRolling,
                         ),
                       ),
 

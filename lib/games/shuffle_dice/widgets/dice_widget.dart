@@ -1,7 +1,13 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/dice_theme.dart';
+import '../models/glb_dice_loader.dart';
 
-class DiceWidget extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// 3D GLB Dice Widget
+// ─────────────────────────────────────────────────────────────────────────────
+class DiceWidget extends StatefulWidget {
   final int value;
   final DiceThemeData theme;
   final double size;
@@ -9,6 +15,7 @@ class DiceWidget extends StatelessWidget {
   final double rotationY;
   final double rotationZ;
   final double elevation;
+  final bool isRolling;
 
   const DiceWidget({
     super.key,
@@ -19,202 +26,376 @@ class DiceWidget extends StatelessWidget {
     this.rotationY = 0.0,
     this.rotationZ = 0.0,
     this.elevation = 16.0,
+    this.isRolling = false,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final validValue = value.clamp(1, 6);
+  State<DiceWidget> createState() => _DiceWidgetState();
+}
 
-    return Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..setEntry(3, 2, 0.0012) // 3D perspective
-        ..rotateX(rotationX)
-        ..rotateY(rotationY)
-        ..rotateZ(rotationZ),
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: theme.dieColor,
-          borderRadius: BorderRadius.circular(theme.borderRadius),
-          border: Border.all(
-            color: theme.borderColor ?? Colors.white.withValues(alpha: 0.15),
-            width: 2.0,
+class _DiceWidgetState extends State<DiceWidget> {
+  GlbDiceMesh? _mesh;
+  ui.Image? _activeTexture;
+  Color? _lastDieColor;
+  Color? _lastDotColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMeshAndTexture();
+  }
+
+  @override
+  void didUpdateWidget(covariant DiceWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.theme.dieColor != widget.theme.dieColor ||
+        oldWidget.theme.dotColor != widget.theme.dotColor) {
+      _updateTexture();
+    }
+  }
+
+  void _loadMeshAndTexture() {
+    _mesh = GlbDiceLoader.cached;
+    if (_mesh != null) {
+      _updateTexture();
+    } else {
+      GlbDiceLoader.load().then((mesh) {
+        if (!mounted) return;
+        setState(() => _mesh = mesh);
+        _updateTexture();
+      });
+    }
+  }
+
+  void _updateTexture() {
+    final mesh = _mesh;
+    if (mesh == null) return;
+    final dieC = widget.theme.dieColor;
+    final dotC = widget.theme.dotColor;
+    if (_lastDieColor == dieC && _lastDotColor == dotC && _activeTexture != null) {
+      return;
+    }
+    _lastDieColor = dieC;
+    _lastDotColor = dotC;
+    mesh.getTextureFor(dieColor: dieC, dotColor: dotC).then((tex) {
+      if (!mounted) return;
+      setState(() => _activeTexture = tex);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mesh = _mesh;
+    final texture = _activeTexture ?? mesh?.baseTextureImage;
+
+    if (mesh == null || texture == null) {
+      return SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation(widget.theme.accentColor),
+            strokeWidth: 2.5,
           ),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              theme.dieColor.withValues(alpha: 1.0),
-              Color.alphaBlend(Colors.black.withValues(alpha: 0.25), theme.dieColor),
-            ],
-          ),
-          boxShadow: [
-            // Ambient soft shadow
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.45),
-              blurRadius: elevation * 1.5,
-              offset: Offset(0, elevation * 0.8),
-              spreadRadius: 2,
-            ),
-            // Bevel highlight
-            BoxShadow(
-              color: Colors.white.withValues(alpha: 0.18),
-              blurRadius: 4,
-              offset: const Offset(-2, -2),
-            ),
-            if (theme.hasGlow)
-              BoxShadow(
-                color: theme.dotColor.withValues(alpha: 0.35),
-                blurRadius: 24,
-                spreadRadius: 4,
-              ),
-          ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(theme.borderRadius),
-          child: Stack(
-            children: [
-              // Subtle corner light sheen
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: size * 0.45,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.12),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // Dots Canvas
-              CustomPaint(
-                size: Size(size, size),
-                painter: _DiceDotsPainter(
-                  value: validValue,
-                  dotColor: theme.dotColor,
-                  hasGlow: theme.hasGlow,
-                ),
-              ),
-            ],
-          ),
+      );
+    }
+
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: CustomPaint(
+        painter: _GlbDicePainter(
+          mesh: mesh,
+          texture: texture,
+          value: widget.value.clamp(1, 6),
+          theme: widget.theme,
+          rotationX: widget.rotationX,
+          rotationY: widget.rotationY,
+          rotationZ: widget.rotationZ,
+          elevation: widget.elevation,
+          isRolling: widget.isRolling,
         ),
       ),
     );
   }
 }
 
-class _DiceDotsPainter extends CustomPainter {
+// ─────────────────────────────────────────────────────────────────────────────
+// CustomPainter that renders the GLB 3D dice mesh with smooth edge corners
+// ─────────────────────────────────────────────────────────────────────────────
+class _GlbDicePainter extends CustomPainter {
+  final GlbDiceMesh mesh;
+  final ui.Image texture;
   final int value;
-  final Color dotColor;
-  final bool hasGlow;
+  final DiceThemeData theme;
+  final double rotationX;
+  final double rotationY;
+  final double rotationZ;
+  final double elevation;
+  final bool isRolling;
 
-  const _DiceDotsPainter({
+  _GlbDicePainter({
+    required this.mesh,
+    required this.texture,
     required this.value,
-    required this.dotColor,
-    required this.hasGlow,
+    required this.theme,
+    required this.rotationX,
+    required this.rotationY,
+    required this.rotationZ,
+    required this.elevation,
+    required this.isRolling,
   });
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final dotRadius = size.width * 0.088; // Scaled dot size
-    final w = size.width;
-    final h = size.height;
-
-    final left = w * 0.26;
-    final right = w * 0.74;
-    final centerW = w * 0.5;
-
-    final top = h * 0.26;
-    final bottom = h * 0.74;
-    final centerH = h * 0.5;
-
-    final List<Offset> points = [];
-
-    switch (value) {
+  // Base rotation angles that bring face `value` to the front (+Z camera view)
+  static (double, double, double) _baseRotationForValue(int val) {
+    switch (val) {
       case 1:
-        points.add(Offset(centerW, centerH));
-        break;
-      case 2:
-        points.add(Offset(left, top));
-        points.add(Offset(right, bottom));
-        break;
-      case 3:
-        points.add(Offset(left, top));
-        points.add(Offset(centerW, centerH));
-        points.add(Offset(right, bottom));
-        break;
-      case 4:
-        points.add(Offset(left, top));
-        points.add(Offset(right, top));
-        points.add(Offset(left, bottom));
-        points.add(Offset(right, bottom));
-        break;
-      case 5:
-        points.add(Offset(left, top));
-        points.add(Offset(right, top));
-        points.add(Offset(centerW, centerH));
-        points.add(Offset(left, bottom));
-        points.add(Offset(right, bottom));
-        break;
+        return (0.0, 0.0, 0.0);
       case 6:
-        points.add(Offset(left, top));
-        points.add(Offset(right, top));
-        points.add(Offset(left, centerH));
-        points.add(Offset(right, centerH));
-        points.add(Offset(left, bottom));
-        points.add(Offset(right, bottom));
-        break;
-    }
-
-    final dotPaint = Paint()
-      ..color = dotColor
-      ..style = PaintingStyle.fill;
-
-    final insetShadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = dotRadius * 0.22;
-
-    final innerHighlightPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.25)
-      ..style = PaintingStyle.fill;
-
-    for (final pt in points) {
-      if (hasGlow) {
-        final glowPaint = Paint()
-          ..color = dotColor.withValues(alpha: 0.45)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-        canvas.drawCircle(pt, dotRadius * 1.3, glowPaint);
-      }
-
-      // Base dot
-      canvas.drawCircle(pt, dotRadius, dotPaint);
-
-      // Inset bevel shadow
-      canvas.drawCircle(pt, dotRadius * 0.88, insetShadowPaint);
-
-      // Small top-left glint reflection
-      canvas.drawCircle(
-        Offset(pt.dx - dotRadius * 0.28, pt.dy - dotRadius * 0.28),
-        dotRadius * 0.28,
-        innerHighlightPaint,
-      );
+        return (0.0, math.pi, 0.0);
+      case 2:
+        return (0.0, -math.pi / 2, 0.0);
+      case 5:
+        return (0.0, math.pi / 2, 0.0);
+      case 3:
+        return (-math.pi / 2, 0.0, 0.0);
+      case 4:
+        return (math.pi / 2, 0.0, 0.0);
+      default:
+        return (0.0, 0.0, 0.0);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DiceDotsPainter oldDelegate) {
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+
+    // Dice scale factor & focal length
+    final modelScale = (size.width * 0.38) / 10.0;
+    final fl = size.width * 2.0;
+
+    // Base rotation to show the current face value
+    final (baseX, baseY, baseZ) = _baseRotationForValue(value);
+
+    // Dynamic rotation during rolling
+    final totalRotX = baseX + rotationX;
+    final totalRotY = baseY + rotationY;
+    final totalRotZ = baseZ + rotationZ;
+
+    // Precalculate sin/cos
+    final cxRot = math.cos(totalRotX);
+    final sxRot = math.sin(totalRotX);
+    final cyRot = math.cos(totalRotY);
+    final syRot = math.sin(totalRotY);
+    final czRot = math.cos(totalRotZ);
+    final szRot = math.sin(totalRotZ);
+
+    // 3D vector rotation: Rz * Ry * Rx
+    List<double> rotateV(double x, double y, double z) {
+      // Rx
+      final y1 = y * cxRot - z * sxRot;
+      final z1 = y * sxRot + z * cxRot;
+      // Ry
+      final x2 = x * cyRot + z1 * syRot;
+      final z2 = -x * syRot + z1 * cyRot;
+      // Rz
+      final x3 = x2 * czRot - y1 * szRot;
+      final y3 = x2 * szRot + y1 * czRot;
+      return [x3, y3, z2];
+    }
+
+    // Directional light vector (upper-right-front)
+    const lx = 0.55;
+    const ly = -0.85;
+    const lz = 1.30;
+    final lLen = math.sqrt(lx * lx + ly * ly + lz * lz);
+    final normLight = [lx / lLen, ly / lLen, lz / lLen];
+
+    // 1. Transform all vertices
+    final transformedVerts = <List<double>>[];
+    final projectedVerts = <Offset>[];
+    final vertexColors = <Color>[];
+
+    for (int i = 0; i < mesh.positions.length; i++) {
+      final p = mesh.positions[i];
+      final n = mesh.normals[i];
+
+      final rotP = rotateV(p[0] * modelScale, p[1] * modelScale, p[2] * modelScale);
+      transformedVerts.add(rotP);
+
+      // Perspective projection
+      final scale = fl / (fl - rotP[2]);
+      projectedVerts.add(Offset(cx + rotP[0] * scale, cy + rotP[1] * scale));
+
+      // Shading: ambient (0.42) + diffuse (0.58)
+      final rotN = rotateV(n[0], n[1], n[2]);
+      final dot = (rotN[0] * normLight[0] + rotN[1] * normLight[1] + rotN[2] * normLight[2]).clamp(0.0, 1.0);
+      final brightness = (0.42 + 0.58 * dot).clamp(0.0, 1.0);
+
+      vertexColors.add(Color.from(
+        alpha: 1.0,
+        red: brightness,
+        green: brightness,
+        blue: brightness,
+      ));
+    }
+
+    // 2. Drop shadow oval below dice
+    final half = size.width * 0.40;
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(cx, cy + half + elevation * 0.4),
+        width: half * 1.9,
+        height: half * 0.38,
+      ),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.35)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, elevation * 0.7),
+    );
+
+    // 3. Glow ring (if theme has glow)
+    if (theme.hasGlow) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(cx, cy),
+          width: half * 2.8,
+          height: half * 2.8,
+        ),
+        Paint()
+          ..color = theme.dotColor.withValues(alpha: 0.20)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 36),
+      );
+    }
+
+    // 4. Depth sort visible triangles (Painter's algorithm)
+    final visibleTriangles = <(double, int, int, int)>[];
+    for (int i = 0; i < mesh.indices.length; i += 3) {
+      final i0 = mesh.indices[i];
+      final i1 = mesh.indices[i + 1];
+      final i2 = mesh.indices[i + 2];
+
+      final p0 = transformedVerts[i0];
+      final p1 = transformedVerts[i1];
+      final p2 = transformedVerts[i2];
+
+      // Cross product for outward normal
+      final e1x = p1[0] - p0[0];
+      final e1y = p1[1] - p0[1];
+
+      final e2x = p2[0] - p0[0];
+      final e2y = p2[1] - p0[1];
+
+      final normZ = e1x * e2y - e1y * e2x;
+
+      // Back-face culling: camera looks toward +Z
+      if (normZ > -0.01) {
+        final avgZ = (p0[2] + p1[2] + p2[2]) / 3;
+        visibleTriangles.add((avgZ, i0, i1, i2));
+      }
+    }
+
+    // Sort furthest Z first
+    visibleTriangles.sort((a, b) => a.$1.compareTo(b.$1));
+
+    if (visibleTriangles.isEmpty) return;
+
+    // 5. Build sorted indices list
+    final sortedIndices = <int>[];
+    for (final tri in visibleTriangles) {
+      sortedIndices.add(tri.$2);
+      sortedIndices.add(tri.$3);
+      sortedIndices.add(tri.$4);
+    }
+
+    // 6. Scale UVs to texture image pixel dimensions
+    final imgW = texture.width.toDouble();
+    final imgH = texture.height.toDouble();
+    final pixelUvs = mesh.uvs.map((uv) => Offset(uv.dx * imgW, uv.dy * imgH)).toList();
+
+    // 7. Render 3D mesh via Canvas.drawVertices with the recolored texture shader
+    final identityMatrix = Matrix4.identity().storage;
+    final imageShader = ImageShader(
+      texture,
+      TileMode.clamp,
+      TileMode.clamp,
+      identityMatrix,
+    );
+
+    final vertices = ui.Vertices(
+      VertexMode.triangles,
+      projectedVerts,
+      textureCoordinates: pixelUvs,
+      colors: vertexColors,
+      indices: sortedIndices,
+    );
+
+    final meshPaint = Paint()
+      ..shader = imageShader
+      ..isAntiAlias = true;
+
+    // Determine if dice has stopped / resting on the stop screen
+    final isStopped = !isRolling &&
+        rotationX.abs() < 0.05 &&
+        rotationY.abs() < 0.05 &&
+        rotationZ.abs() < 0.05;
+
+    // Projected front face dimension for smooth rounded corner mask
+    final frontHalf = (size.width * 0.38) * (fl / (fl - (size.width * 0.38)));
+    final diceRect = Rect.fromCenter(
+      center: Offset(cx, cy),
+      width: frontHalf * 2,
+      height: frontHalf * 2,
+    );
+    final rrect = RRect.fromRectAndRadius(
+      diceRect,
+      Radius.circular(theme.borderRadius),
+    );
+
+    if (isStopped) {
+      // Apply smooth rounded corner clip to eliminate rough polygonal chamfers
+      canvas.save();
+      canvas.clipRRect(rrect);
+    }
+
+    // Draw the 3D dice mesh
+    canvas.drawVertices(vertices, BlendMode.modulate, meshPaint);
+
+    if (isStopped) {
+      canvas.restore();
+
+      // 8. Smooth anti-aliased bevel border & corner light sheen on stop screen
+      final borderPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..color = theme.borderColor ?? Colors.white.withValues(alpha: 0.18);
+      canvas.drawRRect(rrect, borderPaint);
+
+      // Subtle bevel sheen on resting dice
+      final sheenPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.14),
+            Colors.transparent,
+            Colors.black.withValues(alpha: 0.15),
+          ],
+        ).createShader(diceRect);
+      canvas.drawRRect(rrect, sheenPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GlbDicePainter oldDelegate) {
     return oldDelegate.value != value ||
-        oldDelegate.dotColor != dotColor ||
-        oldDelegate.hasGlow != hasGlow;
+        oldDelegate.rotationX != rotationX ||
+        oldDelegate.rotationY != rotationY ||
+        oldDelegate.rotationZ != rotationZ ||
+        oldDelegate.elevation != elevation ||
+        oldDelegate.theme != theme ||
+        oldDelegate.texture != texture ||
+        oldDelegate.isRolling != isRolling;
   }
 }
