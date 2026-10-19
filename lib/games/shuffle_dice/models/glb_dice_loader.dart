@@ -212,14 +212,23 @@ class GlbDiceLoader {
       }
     }
 
-    // 5. Decode embedded texture image (Image 0)
-    final images = gltfJson['images'] as List;
-    final img0 = images[0] as Map<String, dynamic>;
-    final imgBvIdx = img0['bufferView'] as int;
-    final imgBv = bufferViews[imgBvIdx] as Map<String, dynamic>;
-    final imgOffset = imgBv['byteOffset'] as int? ?? 0;
-    final imgLength = imgBv['byteLength'] as int;
-    final imgBytes = binData.sublist(imgOffset, imgOffset + imgLength);
+    // 5. Decode high-resolution texture (2048x2048 Ultra-HD) or embedded fallback
+    Uint8List imgBytes;
+    try {
+      final highResData = await rootBundle.load('assets/models/dice_texture_2048.png');
+      imgBytes = highResData.buffer.asUint8List(
+        highResData.offsetInBytes,
+        highResData.lengthInBytes,
+      );
+    } catch (_) {
+      final images = gltfJson['images'] as List;
+      final img0 = images[0] as Map<String, dynamic>;
+      final imgBvIdx = img0['bufferView'] as int;
+      final imgBv = bufferViews[imgBvIdx] as Map<String, dynamic>;
+      final imgOffset = imgBv['byteOffset'] as int? ?? 0;
+      final imgLength = imgBv['byteLength'] as int;
+      imgBytes = binData.sublist(imgOffset, imgOffset + imgLength);
+    }
 
     final codec = await ui.instantiateImageCodec(imgBytes);
     final frame = await codec.getNextFrame();

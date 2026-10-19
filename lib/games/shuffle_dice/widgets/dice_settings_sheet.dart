@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import '../services/dice_settings_service.dart';
 
 class DiceSettingsSheet extends StatelessWidget {
+  final double shuffleDuration;
+  final ValueChanged<double> onShuffleDurationChanged;
+
+  final ShuffleSpeed shuffleSpeed;
+  final ValueChanged<ShuffleSpeed> onShuffleSpeedChanged;
+
   final bool soundEnabled;
   final ValueChanged<bool> onSoundChanged;
 
@@ -18,11 +25,15 @@ class DiceSettingsSheet extends StatelessWidget {
 
   const DiceSettingsSheet({
     super.key,
+    this.shuffleDuration = 2.0,
+    required this.onShuffleDurationChanged,
+    this.shuffleSpeed = ShuffleSpeed.normal,
+    required this.onShuffleSpeedChanged,
     required this.soundEnabled,
     required this.onSoundChanged,
     required this.vibrateOnStop,
     required this.onVibrateChanged,
-    required this.voiceCommandEnabled,
+    this.voiceCommandEnabled = false,
     required this.onVoiceCommandChanged,
     this.isVoiceListening = false,
     required this.cleanMode,
@@ -33,6 +44,9 @@ class DiceSettingsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFF161922),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -50,7 +64,7 @@ class DiceSettingsSheet extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -61,7 +75,7 @@ class DiceSettingsSheet extends StatelessWidget {
                 child: Container(
                   width: 44,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 20),
+                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: Colors.white24,
                     borderRadius: BorderRadius.circular(2),
@@ -96,17 +110,17 @@ class DiceSettingsSheet extends StatelessWidget {
                           'DICE CONTROLS & SETTINGS',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 1.5,
+                            letterSpacing: 1.2,
                           ),
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Configure sound, feedback & hands-free play',
+                          'Adjust shuffle duration, speed & feedback',
                           style: TextStyle(
                             color: Colors.white54,
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                         ),
                       ],
@@ -120,9 +134,200 @@ class DiceSettingsSheet extends StatelessWidget {
                 ],
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-              // 1. Sound On / Off
+              // ── 1. Shuffle Duration Adjustment Slider ──────────────────────
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF64B5F6).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.timer_outlined,
+                            color: Color(0xFF64B5F6),
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Shuffle Duration',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _durationDescription(shuffleDuration),
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.20),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: accentColor.withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            '${shuffleDuration.toStringAsFixed(1)}s',
+                            style: TextStyle(
+                              color: accentColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: accentColor,
+                        inactiveTrackColor: Colors.white12,
+                        thumbColor: accentColor,
+                        overlayColor: accentColor.withValues(alpha: 0.2),
+                        trackHeight: 4,
+                      ),
+                      child: Slider(
+                        value: shuffleDuration.clamp(0.5, 5.0),
+                        min: 0.5,
+                        max: 5.0,
+                        divisions: 45,
+                        label: '${shuffleDuration.toStringAsFixed(1)}s',
+                        onChanged: onShuffleDurationChanged,
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildDurationChip(context, label: '0.8s Fast', target: 0.8),
+                        _buildDurationChip(context, label: '1.5s Snappy', target: 1.5),
+                        _buildDurationChip(context, label: '2.0s Normal', target: 2.0),
+                        _buildDurationChip(context, label: '3.5s Epic', target: 3.5),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // ── 2. Shuffle Speed Mode Dropdown ──────────────────────────────
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB74D).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.speed_rounded,
+                        color: Color(0xFFFFB74D),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Shuffle Speed Mode',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Intensity & pattern',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<ShuffleSpeed>(
+                        value: shuffleSpeed,
+                        dropdownColor: const Color(0xFF222736),
+                        borderRadius: BorderRadius.circular(14),
+                        icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70),
+                        items: ShuffleSpeed.values.map((s) {
+                          return DropdownMenuItem<ShuffleSpeed>(
+                            value: s,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(s.icon, size: 16, color: accentColor),
+                                const SizedBox(width: 8),
+                                Text(
+                                  s.label,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) onShuffleSpeedChanged(val);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // ── 3. Sound On / Off ───────────────────────────────────────────
               _buildSettingTile(
                 icon: soundEnabled
                     ? Icons.volume_up_rounded
@@ -138,7 +343,7 @@ class DiceSettingsSheet extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // 2. Vibrate Feedback after Stop On / Off
+              // ── 4. Vibrate Feedback after Stop On / Off ─────────────────────
               _buildSettingTile(
                 icon: vibrateOnStop
                     ? Icons.vibration_rounded
@@ -154,53 +359,7 @@ class DiceSettingsSheet extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // 3. Voice Command Dice Rolling On / Off
-              _buildSettingTile(
-                icon: voiceCommandEnabled
-                    ? Icons.mic_rounded
-                    : Icons.mic_off_rounded,
-                iconColor: voiceCommandEnabled
-                    ? (isVoiceListening ? const Color(0xFFFF5252) : const Color(0xFF448AFF))
-                    : Colors.white38,
-                title: 'Voice Command Rolling',
-                subtitle: voiceCommandEnabled
-                    ? (isVoiceListening
-                        ? 'Listening: Say "Roll", "Dice", "Shake", "Go"'
-                        : 'Voice active — ready for keywords')
-                    : 'Disabled — roll via tap/shake/swipe',
-                value: voiceCommandEnabled,
-                badge: voiceCommandEnabled && isVoiceListening
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF5252).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFFF5252), width: 0.8),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.fiber_manual_record, size: 8, color: Color(0xFFFF5252)),
-                            SizedBox(width: 4),
-                            Text(
-                              'MIC ON',
-                              style: TextStyle(
-                                color: Color(0xFFFF5252),
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : null,
-                onChanged: onVoiceCommandChanged,
-              ),
-
-              const SizedBox(height: 12),
-
-              // 4. Clean Screen Mode (Zen Mode)
+              // ── 5. Clean Screen Mode (Zen Mode) ─────────────────────────────
               _buildSettingTile(
                 icon: cleanMode
                     ? Icons.visibility_off_rounded
@@ -216,6 +375,50 @@ class DiceSettingsSheet extends StatelessWidget {
 
               const SizedBox(height: 16),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _durationDescription(double sec) {
+    if (sec <= 1.0) return 'Ultra fast & snappy';
+    if (sec <= 1.8) return 'Quick dynamic shuffle';
+    if (sec <= 2.8) return 'Standard balanced roll';
+    if (sec <= 4.0) return 'Suspenseful rolling drama';
+    return 'Extended suspense roll';
+  }
+
+  Widget _buildDurationChip(
+    BuildContext context, {
+    required String label,
+    required double target,
+  }) {
+    final isSelected = (shuffleDuration - target).abs() < 0.15;
+    return InkWell(
+      onTap: () => onShuffleDurationChanged(target),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? accentColor.withValues(alpha: 0.22)
+              : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? accentColor.withValues(alpha: 0.6)
+                : Colors.white.withValues(alpha: 0.1),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? accentColor : Colors.white70,
+            fontSize: 10,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           ),
         ),
       ),

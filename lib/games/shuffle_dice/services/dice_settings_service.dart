@@ -28,6 +28,7 @@ class DiceSettings {
   final ShuffleSpeed shuffleSpeed;
   final bool foodChallengeEnabled;
   final Map<int, String> foodRules;
+  final double shuffleDuration;
   final bool soundEnabled;
   final bool vibrateOnStop;
   final bool voiceCommandEnabled;
@@ -35,6 +36,7 @@ class DiceSettings {
   const DiceSettings({
     required this.theme,
     required this.shuffleSpeed,
+    this.shuffleDuration = 2.0,
     required this.foodChallengeEnabled,
     required this.foodRules,
     this.soundEnabled = true,
@@ -46,6 +48,7 @@ class DiceSettings {
     return DiceSettings(
       theme: DiceThemeData.presets[0],
       shuffleSpeed: ShuffleSpeed.normal,
+      shuffleDuration: 2.0,
       foodChallengeEnabled: true,
       foodRules: Map.from(FoodChallengePreset.presets[0].rules),
       soundEnabled: true,
@@ -63,6 +66,7 @@ class DiceSettingsService {
   static const String _kSpeedKey = 'shuffle_dice_speed_mode';
   static const String _kFoodEnabledKey = 'shuffle_dice_food_enabled';
   static const String _kFoodRulesKey = 'shuffle_dice_food_rules_map';
+  static const String _kDurationKey = 'shuffle_dice_duration_seconds';
   static const String _kSoundEnabledKey = 'shuffle_dice_sound_enabled';
   static const String _kVibrateStopKey = 'shuffle_dice_vibrate_stop_enabled';
   static const String _kVoiceCommandKey = 'shuffle_dice_voice_command_enabled';
@@ -94,6 +98,9 @@ class DiceSettingsService {
         }
       }
 
+      // Shuffle duration
+      final duration = prefs.getDouble(_kDurationKey) ?? 2.0;
+
       // Food Challenge Enabled
       final foodEnabled = prefs.getBool(_kFoodEnabledKey) ?? true;
 
@@ -124,6 +131,7 @@ class DiceSettingsService {
       return DiceSettings(
         theme: theme,
         shuffleSpeed: speed,
+        shuffleDuration: duration,
         foodChallengeEnabled: foodEnabled,
         foodRules: rules,
         soundEnabled: soundEnabled,
@@ -148,6 +156,14 @@ class DiceSettingsService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kSpeedKey, speed.name);
+    } catch (_) {}
+  }
+
+  /// Save the shuffle roll duration (seconds)
+  static Future<void> saveShuffleDuration(double duration) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_kDurationKey, duration);
     } catch (_) {}
   }
 

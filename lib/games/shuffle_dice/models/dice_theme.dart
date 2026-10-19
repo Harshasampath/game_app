@@ -71,12 +71,12 @@ class DiceThemeData {
 
   static const List<DiceThemeData> presets = [
     DiceThemeData(
-      name: 'Midnight Gold',
-      dieColor: Color(0xFF1E222D),
-      dotColor: Color(0xFFFFD166),
-      backgroundColor: Color(0xFF0D0F14),
-      accentColor: Color(0xFFFFD166),
-      borderColor: Color(0x33FFD166),
+      name: 'Daylight Gold',
+      dieColor: Color.fromARGB(255, 235, 235, 235),
+      dotColor: Color.fromARGB(255, 7, 6, 3),
+      backgroundColor: Color.fromARGB(255, 253, 245, 27),
+      accentColor: Color.fromARGB(255, 57, 41, 4),
+      borderColor: Color.fromARGB(51, 248, 247, 244),
       borderRadius: 32.0,
       hasGlow: true,
     ),

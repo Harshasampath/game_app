@@ -333,7 +333,8 @@ class _GlbDicePainter extends CustomPainter {
 
     final meshPaint = Paint()
       ..shader = imageShader
-      ..isAntiAlias = true;
+      ..isAntiAlias = true
+      ..filterQuality = FilterQuality.high;
 
     // Determine if dice has stopped / resting on the stop screen
     final isStopped = !isRolling &&

@@ -53,8 +53,9 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
   Map<int, String> _foodRules = Map.from(FoodChallengePreset.presets[0].rules);
   String? _lastChallengeResult;
 
-  // ── Shuffle Speed ───────────────────────────────────────────────────────────
+  // ── Shuffle Speed & Duration ────────────────────────────────────────────────
   ShuffleSpeed _shuffleSpeed = ShuffleSpeed.normal;
+  double _shuffleDuration = 2.0;
   bool _showSpeedSelector = false;
 
   // ── 3D rotation angles ──────────────────────────────────────────────────────
@@ -129,11 +130,12 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     setState(() {
       _theme = settings.theme;
       _shuffleSpeed = settings.shuffleSpeed;
+      _shuffleDuration = settings.shuffleDuration;
       _foodChallengeEnabled = settings.foodChallengeEnabled;
       _foodRules = settings.foodRules;
       _soundEnabled = settings.soundEnabled;
       _vibrateOnStop = settings.vibrateOnStop;
-      _voiceCommandEnabled = settings.voiceCommandEnabled;
+      _voiceCommandEnabled = false;
       _updateChallengeResult(_currentValue);
     });
 
@@ -281,17 +283,17 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
         startMs = 180;
         endMs = 420;
       case ShuffleSpeed.normal:
-        baseTicks = 10;
-        startMs = 60;
-        endMs = 320;
+         baseTicks = 24;
+        startMs = 18;
+        endMs = 140;
       case ShuffleSpeed.fast:
         baseTicks = 16;
         startMs = 35;
         endMs = 240;
       case ShuffleSpeed.turbo:
-        baseTicks = 24;
-        startMs = 18;
-        endMs = 140;
+        baseTicks = 15;
+        startMs = 40;
+        endMs = 200;
       case ShuffleSpeed.wild:
         // fallback shouldn't reach here but just in case
         baseTicks = 14;
@@ -304,10 +306,16 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
         ? _random.nextInt(10) - 3 // -3..+7
         : 0;
 
+    // Duration scaling factor (relative to 2.0s baseline)
+    final durationFactor = (_shuffleDuration / 2.0).clamp(0.25, 2.5);
+    final scaledTicks = ((baseTicks + extraTicks) * math.sqrt(durationFactor)).round().clamp(4, 50);
+    final scaledStartMs = (startMs * math.sqrt(durationFactor)) / intensityBoost;
+    final scaledEndMs = endMs * math.sqrt(durationFactor);
+
     return (
-      ticks: (baseTicks + extraTicks).clamp(4, 40),
-      startMs: startMs / intensityBoost,
-      endMs: endMs,
+      ticks: scaledTicks,
+      startMs: scaledStartMs,
+      endMs: scaledEndMs,
     );
   }
 
@@ -436,6 +444,18 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       builder: (_) => StatefulBuilder(
         builder: (context, setSheetState) {
           return DiceSettingsSheet(
+            shuffleDuration: _shuffleDuration,
+            onShuffleDurationChanged: (val) {
+              setSheetState(() => _shuffleDuration = val);
+              setState(() => _shuffleDuration = val);
+              DiceSettingsService.saveShuffleDuration(val);
+            },
+            shuffleSpeed: _shuffleSpeed,
+            onShuffleSpeedChanged: (speed) {
+              setSheetState(() => _shuffleSpeed = speed);
+              setState(() => _shuffleSpeed = speed);
+              DiceSettingsService.saveShuffleSpeed(speed);
+            },
             soundEnabled: _soundEnabled,
             onSoundChanged: (val) {
               setSheetState(() => _soundEnabled = val);
