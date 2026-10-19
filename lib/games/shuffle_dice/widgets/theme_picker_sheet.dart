@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/dice_theme.dart';
+import 'custom_color_picker_dialog.dart';
 
 class ThemePickerSheet extends StatefulWidget {
   final DiceThemeData currentTheme;
@@ -175,6 +176,7 @@ class _ThemePickerSheetState extends State<ThemePickerSheet> {
             ),
             const SizedBox(height: 10),
             _buildColorRow(
+              label: 'Dice Color',
               selectedColor: _theme.dieColor,
               onSelect: (c) => _updateTheme(_theme.copyWith(dieColor: c, name: 'Custom')),
             ),
@@ -190,6 +192,7 @@ class _ThemePickerSheetState extends State<ThemePickerSheet> {
             ),
             const SizedBox(height: 10),
             _buildColorRow(
+              label: 'Dot Color',
               selectedColor: _theme.dotColor,
               onSelect: (c) => _updateTheme(_theme.copyWith(dotColor: c, name: 'Custom')),
             ),
@@ -205,6 +208,7 @@ class _ThemePickerSheetState extends State<ThemePickerSheet> {
             ),
             const SizedBox(height: 10),
             _buildColorRow(
+              label: 'Background Color',
               selectedColor: _theme.backgroundColor,
               onSelect: (c) => _updateTheme(_theme.copyWith(backgroundColor: c, name: 'Custom')),
             ),
@@ -215,6 +219,7 @@ class _ThemePickerSheetState extends State<ThemePickerSheet> {
   }
 
   Widget _buildColorRow({
+    required String label,
     required Color selectedColor,
     required ValueChanged<Color> onSelect,
   }) {
@@ -222,10 +227,70 @@ class _ThemePickerSheetState extends State<ThemePickerSheet> {
       height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _palette.length,
+        itemCount: _palette.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final color = _palette[index];
+          if (index == 0) {
+            // Interactive Custom Color Picker Trigger
+            return GestureDetector(
+              onTap: () async {
+                final picked = await CustomColorPickerDialog.show(
+                  context: context,
+                  initialColor: selectedColor,
+                  title: 'Custom $label',
+                );
+                if (picked != null) {
+                  onSelect(picked);
+                }
+              },
+              child: Container(
+                width: 78,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFFF0055),
+                      Color(0xFFFF9900),
+                      Color(0xFF00E676),
+                      Color(0xFF00B0FF),
+                      Color(0xFFAA00FF),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(2),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161B26),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.colorize_rounded, size: 14, color: Colors.white),
+                      SizedBox(width: 4),
+                      Text(
+                        'Pick',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          final color = _palette[index - 1];
           final isSelected = selectedColor.toARGB32() == color.toARGB32();
 
           return GestureDetector(
