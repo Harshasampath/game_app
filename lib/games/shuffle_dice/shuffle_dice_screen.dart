@@ -33,7 +33,6 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
   List<int> _currentValues = [1];
   List<int> _targetValues = [1];
   int _currentValue = 1;
-  int _targetValue = 1;
   bool _isRolling = false;
 
   int get _totalSum => _currentValues.fold(0, (a, b) => a + b);
@@ -64,26 +63,11 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
   bool _showSpeedSelector = false;
 
   // ── 3D rotation angles ──────────────────────────────────────────────────────
-  double _rotX = 0.0;
-  double _rotY = 0.0;
-  double _rotZ = 0.0;
+  // ── 3D Continuous Roll Physics (VSync-driven) ────────────────────────────────
+  late final AnimationController _rollController;
+  List<_DieSpinTrajectory> _trajectories = [];
+  double _lastHapticProgress = 0.0;
   double _scale = 1.0;
-
-  // ── Slot-machine ticker ─────────────────────────────────────────────────────
-  // Instead of one AnimationController with a fixed duration we drive
-  // an explicit timer-based "tick" loop that decelerates:
-  //   • start with a short interval (fast flipping)
-  //   • each tick the interval grows  → visually slows down
-  //   • final tick snaps to the target value
-
-  Timer? _tickTimer;
-  int _ticksRemaining = 0;
-  int _totalTicks = 0;
-  double _currentTickMs = 40.0; // ms between face changes
-  double _targetTickMs = 280.0; // final (slow) tick ms
-  double _landingRotX = 0.0;
-  double _landingRotY = 0.0;
-  double _landingRotZ = 0.0;
 
   // ── Shake sensor ────────────────────────────────────────────────────────────
   StreamSubscription<UserAccelerometerEvent>? _sensorSubscription;
@@ -104,8 +88,27 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     _currentValues = [_random.nextInt(6) + 1];
     _targetValues = List.from(_currentValues);
     _currentValue = _currentValues.first;
-    _targetValue = _currentValue;
     _updateChallengeResult(_currentValue);
+
+    // VSync 60Hz/120Hz continuous physics roll controller
+    _rollController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    _rollController.addListener(() {
+      if (!mounted) return;
+      final val = _rollController.value;
+      if (val - _lastHapticProgress >= 0.14 && val < 0.70) {
+        _lastHapticProgress = val;
+        HapticFeedback.selectionClick();
+      }
+      setState(() {});
+    });
+    _rollController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _onRollComplete();
+      }
+    });
 
     // Spring-back scale controller (just for visual bounce on land)
     _scaleController = AnimationController(
@@ -132,6 +135,18 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     FlameAudio.audioCache.load('dice_rolling.wav').ignore();
   }
 
+  @override
+  void dispose() {
+    _sensorSubscription?.cancel();
+    try {
+      _speech.stop();
+    } catch (_) {}
+    _rollController.dispose();
+    _scaleController.dispose();
+    _stopRotController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSavedSettings() async {
     final settings = await DiceSettingsService.loadSettings();
     if (!mounted) return;
@@ -143,7 +158,6 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       _currentValues = List.generate(_diceCount, (_) => _random.nextInt(6) + 1);
       _targetValues = List.from(_currentValues);
       _currentValue = _currentValues.first;
-      _targetValue = _targetValues.first;
       _foodChallengeEnabled = settings.foodChallengeEnabled;
       _foodRules = settings.foodRules;
       _soundEnabled = settings.soundEnabled;
@@ -232,19 +246,6 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     if (mounted) setState(() => _isListening = false);
   }
 
-  @override
-  void dispose() {
-    _voiceRestartTimer?.cancel();
-    try {
-      _speech.stop();
-    } catch (_) {}
-    _tickTimer?.cancel();
-    _sensorSubscription?.cancel();
-    _scaleController.dispose();
-    _stopRotController.dispose();
-    super.dispose();
-  }
-
   // ── Shake ───────────────────────────────────────────────────────────────────
 
   void _initShakeDetector() {
@@ -276,64 +277,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     }
   }
 
-  // ── Speed Calculation ────────────────────────────────────────────────────────
-  // Returns (totalTicks, startIntervalMs, endIntervalMs)
-  ({int ticks, double startMs, double endMs}) _calcSpeedParams({
-    required double intensityBoost,
-  }) {
-    // Wild = pick a random speed profile every roll
-    final effectiveSpeed = _shuffleSpeed == ShuffleSpeed.wild
-        ? ShuffleSpeed.values[_random.nextInt(ShuffleSpeed.values.length - 1)]
-        : _shuffleSpeed;
-
-    // Base parameters per mode
-    late int baseTicks;
-    late double startMs;
-    late double endMs;
-
-    switch (effectiveSpeed) {
-      case ShuffleSpeed.slow:
-        baseTicks = 6;
-        startMs = 180;
-        endMs = 420;
-      case ShuffleSpeed.normal:
-         baseTicks = 24;
-        startMs = 18;
-        endMs = 140;
-      case ShuffleSpeed.fast:
-        baseTicks = 16;
-        startMs = 35;
-        endMs = 240;
-      case ShuffleSpeed.turbo:
-        baseTicks = 15;
-        startMs = 40;
-        endMs = 200;
-      case ShuffleSpeed.wild:
-        // fallback shouldn't reach here but just in case
-        baseTicks = 14;
-        startMs = 40;
-        endMs = 280;
-    }
-
-    // Wild mode: randomize tick count a bit for extra unpredictability
-    final extraTicks = _shuffleSpeed == ShuffleSpeed.wild
-        ? _random.nextInt(10) - 3 // -3..+7
-        : 0;
-
-    // Duration scaling factor (relative to 2.0s baseline)
-    final durationFactor = (_shuffleDuration / 2.0).clamp(0.25, 2.5);
-    final scaledTicks = ((baseTicks + extraTicks) * math.sqrt(durationFactor)).round().clamp(4, 50);
-    final scaledStartMs = (startMs * math.sqrt(durationFactor)) / intensityBoost;
-    final scaledEndMs = endMs * math.sqrt(durationFactor);
-
-    return (
-      ticks: scaledTicks,
-      startMs: scaledStartMs,
-      endMs: scaledEndMs,
-    );
-  }
-
-  // ── Main Roll ────────────────────────────────────────────────────────────────
+  // ── Main Roll (Continuous VSync Physics) ────────────────────────────────────
   void _rollDice({
     double intensityBoost = 1.0,
     double dx = 0.0,
@@ -355,100 +299,82 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       } catch (_) {}
     }
 
+    // Determine target values
     _targetValues = List.generate(_diceCount, (_) => _random.nextInt(6) + 1);
-    _targetValue = _targetValues.first;
-    _isRolling = true;
 
-    // Random landing rotation
-    _landingRotX = (_random.nextBool() ? 2.0 : -2.0) * intensityBoost;
-    _landingRotY = (_random.nextBool() ? 2.0 : -2.0) * intensityBoost;
-    _landingRotZ = (_random.nextBool() ? 1.5 : -1.5) * intensityBoost;
+    // Calculate continuous 3D spin trajectories for each die
+    _trajectories = List.generate(_diceCount, (i) {
+      final startVal = (i < _currentValues.length) ? _currentValues[i] : 1;
+      final targetVal = _targetValues[i];
 
-    if (dx.abs() > 10 || dy.abs() > 10) {
-      _landingRotX = (dy > 0 ? 1.5 : -1.5) * intensityBoost;
-      _landingRotY = (dx > 0 ? 1.5 : -1.5) * intensityBoost;
-    }
+      final (startBx, startBy, startBz) = DiceWidget.baseRotationForValue(startVal);
+      final (targetBx, targetBy, targetBz) = DiceWidget.baseRotationForValue(targetVal);
 
-    final params = _calcSpeedParams(intensityBoost: intensityBoost);
-    _totalTicks = params.ticks;
-    _ticksRemaining = params.ticks;
-    _currentTickMs = params.startMs;
-    _targetTickMs = params.endMs;
-
-    HapticFeedback.mediumImpact();
-    _scheduleTick();
-  }
-
-  // ── Slot-machine Tick Loop ───────────────────────────────────────────────────
-  void _scheduleTick() {
-    _tickTimer?.cancel();
-    _tickTimer = Timer(Duration(milliseconds: _currentTickMs.round()), _onTick);
-  }
-
-  void _onTick() {
-    if (!mounted) return;
-
-    _ticksRemaining--;
-
-    final progress = 1.0 - (_ticksRemaining / _totalTicks); // 0→1
-
-    // ── Face flip (randomize until last tick) ──────────────────────────────
-    final isLastTick = _ticksRemaining <= 0;
-    setState(() {
-      _currentValues = isLastTick
-          ? List.from(_targetValues)
-          : List.generate(_diceCount, (_) => _random.nextInt(6) + 1);
-      _currentValue = _currentValues.first;
-
-      // ── 3D Rotation: spin full rotations at start, dampen toward end ──────
-      final spinFactor = (1.0 - progress) * 2 * math.pi;
-      _rotX = _landingRotX * spinFactor * (1 - progress);
-      _rotY = _landingRotY * spinFactor * (1 - progress);
-      _rotZ = _landingRotZ * spinFactor * (1 - progress);
-
-      // Scale: lift on first half, settle on second half
-      if (!isLastTick) {
-        _scale = 1.0 + math.sin(progress * math.pi) * 0.20;
+      double speedMultiplier = _shuffleSpeed.multiplier;
+      if (speedMultiplier <= 0) {
+        speedMultiplier = [0.8, 1.2, 1.8, 2.6][_random.nextInt(4)];
       }
+
+      final baseTurns = (3.5 * intensityBoost).clamp(2.0, 7.0).round();
+      final turnsX = (baseTurns + _random.nextInt(2)) * (_random.nextBool() ? 1 : -1);
+      final turnsY = (baseTurns + _random.nextInt(2)) * (_random.nextBool() ? 1 : -1);
+      final turnsZ = (_random.nextInt(2) + 1) * (_random.nextBool() ? 1 : -1);
+
+      double finalTurnsX = turnsX.toDouble();
+      double finalTurnsY = turnsY.toDouble();
+
+      if (dx.abs() > 20 || dy.abs() > 20) {
+        finalTurnsX = (baseTurns + 2) * (dy > 0 ? 1.0 : -1.0);
+        finalTurnsY = (baseTurns + 2) * (dx > 0 ? 1.0 : -1.0);
+      }
+
+      final totalX = (startBx - targetBx) + finalTurnsX * 2 * math.pi;
+      final totalY = (startBy - targetBy) + finalTurnsY * 2 * math.pi;
+      final totalZ = (startBz - targetBz) + turnsZ * 2 * math.pi;
+
+      return _DieSpinTrajectory(
+        totalRotX: totalX,
+        totalRotY: totalY,
+        totalRotZ: totalZ,
+      );
     });
 
-    // ── Haptics ────────────────────────────────────────────────────────────
-    if (isLastTick) {
-      if (_vibrateOnStop) {
-        HapticFeedback.heavyImpact();
-      }
-    } else if (progress < 0.4) {
-      // rapid phase: fast haptic clicks
-      HapticFeedback.selectionClick();
+    double speedMultiplier = _shuffleSpeed.multiplier;
+    if (speedMultiplier <= 0) {
+      speedMultiplier = [0.75, 1.0, 1.7, 2.8][_random.nextInt(4)];
     }
+    final durationMs = ((_shuffleDuration * 1000) / (speedMultiplier * math.sqrt(intensityBoost)))
+        .clamp(400.0, 5000.0);
 
-    if (isLastTick) {
-      // Land: spring-back bounce
-      setState(() {
-        _rotX = 0;
-        _rotY = 0;
-        _rotZ = 0;
-        _scale = 1.0;
-        _isRolling = false;
+    _isRolling = true;
+    _lastHapticProgress = 0.0;
+    HapticFeedback.mediumImpact();
+
+    _rollController.duration = Duration(milliseconds: durationMs.round());
+    _rollController.forward(from: 0.0);
+  }
+
+  void _onRollComplete() {
+    if (!mounted) return;
+    setState(() {
+      _currentValues = List.from(_targetValues);
+      _currentValue = _currentValues.first;
+      _isRolling = false;
+      _trajectories.clear();
+    });
+
+    if (_vibrateOnStop) {
+      HapticFeedback.heavyImpact();
+    }
+    _scaleController.forward(from: 0);
+    _updateChallengeResult(_currentValue);
+
+    if (_voiceCommandEnabled) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted && _voiceCommandEnabled && !_isRolling) {
+          _startListening();
+        }
       });
-      _scaleController.forward(from: 0);
-      _updateChallengeResult(_targetValue);
-
-      if (_voiceCommandEnabled) {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted && _voiceCommandEnabled && !_isRolling) {
-            _startListening();
-          }
-        });
-      }
-    } else {
-      // ── Decelerate: interval grows with smooth easing ───────
-      // Use Flutter's easeOutCubic curve for smoother timing
-      final eased = Curves.easeOutCubic.transform(progress);
-      _currentTickMs =
-          _currentTickMs + (_targetTickMs - _currentTickMs) * eased * 0.35;
-
-      _scheduleTick();
     }
   }
 
@@ -480,7 +406,6 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                   _targetValues = _targetValues.sublist(0, _diceCount);
                 }
                 _currentValue = _currentValues.first;
-                _targetValue = _targetValues.first;
                 _updateChallengeResult(_currentValue);
               });
               DiceSettingsService.saveDiceCount(val);
@@ -635,7 +560,9 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
 
                       // Dice
                       Transform.scale(
-                        scale: _scale,
+                        scale: _isRolling
+                            ? (1.0 + math.sin(_rollController.value * math.pi) * 0.16)
+                            : _scale,
                         child: _buildDiceArea(diceDimension),
                       ),
 
@@ -875,18 +802,38 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     );
   }
 
+  Widget _buildSingleDie({
+    required int index,
+    required double size,
+  }) {
+    final progress = _isRolling
+        ? Curves.easeOutCubic.transform(_rollController.value)
+        : 1.0;
+    final traj = (index < _trajectories.length) ? _trajectories[index] : null;
+    final rX = (_isRolling && traj != null) ? traj.totalRotX * (1.0 - progress) : 0.0;
+    final rY = (_isRolling && traj != null) ? traj.totalRotY * (1.0 - progress) : 0.0;
+    final rZ = (_isRolling && traj != null) ? traj.totalRotZ * (1.0 - progress) : 0.0;
+    final elevation = _isRolling
+        ? (16.0 + math.sin(_rollController.value * math.pi) * 20.0)
+        : 16.0;
+
+    final targetVal = (index < _targetValues.length) ? _targetValues[index] : 1;
+
+    return DiceWidget(
+      value: targetVal,
+      theme: _theme,
+      size: size,
+      rotationX: rX,
+      rotationY: rY,
+      rotationZ: rZ,
+      elevation: elevation,
+      isRolling: _isRolling,
+    );
+  }
+
   Widget _buildDiceArea(double baseDimension) {
     if (_diceCount == 1) {
-      return DiceWidget(
-        value: _currentValues[0],
-        theme: _theme,
-        size: baseDimension,
-        rotationX: _rotX,
-        rotationY: _rotY,
-        rotationZ: _rotZ,
-        elevation: _isRolling ? 32.0 : 16.0,
-        isRolling: _isRolling,
-      );
+      return _buildSingleDie(index: 0, size: baseDimension);
     }
 
     if (_diceCount == 2) {
@@ -894,27 +841,9 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          DiceWidget(
-            value: _currentValues[0],
-            theme: _theme,
-            size: size,
-            rotationX: _rotX,
-            rotationY: _rotY,
-            rotationZ: _rotZ,
-            elevation: _isRolling ? 28.0 : 14.0,
-            isRolling: _isRolling,
-          ),
+          _buildSingleDie(index: 0, size: size),
           const SizedBox(width: 16),
-          DiceWidget(
-            value: _currentValues[1],
-            theme: _theme,
-            size: size,
-            rotationX: -_rotY * 0.9,
-            rotationY: _rotX * 1.1,
-            rotationZ: -_rotZ * 0.85,
-            elevation: _isRolling ? 28.0 : 14.0,
-            isRolling: _isRolling,
-          ),
+          _buildSingleDie(index: 1, size: size),
         ],
       );
     }
@@ -924,38 +853,11 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          DiceWidget(
-            value: _currentValues[0],
-            theme: _theme,
-            size: size,
-            rotationX: _rotX,
-            rotationY: _rotY,
-            rotationZ: _rotZ,
-            elevation: _isRolling ? 24.0 : 12.0,
-            isRolling: _isRolling,
-          ),
+          _buildSingleDie(index: 0, size: size),
           const SizedBox(width: 10),
-          DiceWidget(
-            value: _currentValues[1],
-            theme: _theme,
-            size: size,
-            rotationX: -_rotY * 0.85,
-            rotationY: _rotX * 1.05,
-            rotationZ: -_rotZ * 0.9,
-            elevation: _isRolling ? 24.0 : 12.0,
-            isRolling: _isRolling,
-          ),
+          _buildSingleDie(index: 1, size: size),
           const SizedBox(width: 10),
-          DiceWidget(
-            value: _currentValues[2],
-            theme: _theme,
-            size: size,
-            rotationX: _rotZ * 0.9,
-            rotationY: -_rotX * 0.95,
-            rotationZ: _rotY * 1.1,
-            elevation: _isRolling ? 24.0 : 12.0,
-            isRolling: _isRolling,
-          ),
+          _buildSingleDie(index: 2, size: size),
         ],
       );
     }
@@ -968,54 +870,18 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              DiceWidget(
-                value: _currentValues[0],
-                theme: _theme,
-                size: size,
-                rotationX: _rotX,
-                rotationY: _rotY,
-                rotationZ: _rotZ,
-                elevation: _isRolling ? 24.0 : 12.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 0, size: size),
               const SizedBox(width: 14),
-              DiceWidget(
-                value: _currentValues[1],
-                theme: _theme,
-                size: size,
-                rotationX: -_rotY * 0.9,
-                rotationY: _rotX * 1.1,
-                rotationZ: -_rotZ * 0.85,
-                elevation: _isRolling ? 24.0 : 12.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 1, size: size),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              DiceWidget(
-                value: _currentValues[2],
-                theme: _theme,
-                size: size,
-                rotationX: _rotZ * 0.85,
-                rotationY: -_rotX * 0.95,
-                rotationZ: _rotY * 1.05,
-                elevation: _isRolling ? 24.0 : 12.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 2, size: size),
               const SizedBox(width: 14),
-              DiceWidget(
-                value: _currentValues[3],
-                theme: _theme,
-                size: size,
-                rotationX: -_rotX * 1.05,
-                rotationY: -_rotZ * 0.9,
-                rotationZ: _rotX * 0.95,
-                elevation: _isRolling ? 24.0 : 12.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 3, size: size),
             ],
           ),
         ],
@@ -1030,72 +896,27 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              DiceWidget(
-                value: _currentValues[0],
-                theme: _theme,
-                size: size,
-                rotationX: _rotX,
-                rotationY: _rotY,
-                rotationZ: _rotZ,
-                elevation: _isRolling ? 20.0 : 10.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 0, size: size),
               const SizedBox(width: 8),
-              DiceWidget(
-                value: _currentValues[1],
-                theme: _theme,
-                size: size,
-                rotationX: -_rotY * 0.85,
-                rotationY: _rotX * 1.05,
-                rotationZ: -_rotZ * 0.9,
-                elevation: _isRolling ? 20.0 : 10.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 1, size: size),
               const SizedBox(width: 8),
-              DiceWidget(
-                value: _currentValues[2],
-                theme: _theme,
-                size: size,
-                rotationX: _rotZ * 0.9,
-                rotationY: -_rotX * 0.95,
-                rotationZ: _rotY * 1.1,
-                elevation: _isRolling ? 20.0 : 10.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 2, size: size),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              DiceWidget(
-                value: _currentValues[3],
-                theme: _theme,
-                size: size,
-                rotationX: -_rotX * 1.05,
-                rotationY: -_rotZ * 0.9,
-                rotationZ: _rotX * 0.95,
-                elevation: _isRolling ? 20.0 : 10.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 3, size: size),
               const SizedBox(width: 10),
-              DiceWidget(
-                value: _currentValues[4],
-                theme: _theme,
-                size: size,
-                rotationX: _rotY * 0.95,
-                rotationY: _rotZ * 0.95,
-                rotationZ: -_rotX * 0.9,
-                elevation: _isRolling ? 20.0 : 10.0,
-                isRolling: _isRolling,
-              ),
+              _buildSingleDie(index: 4, size: size),
             ],
           ),
         ],
       );
     }
 
-    // 6 dice (3 on top row, 3 on bottom row)
+    // 6 dice
     final size = (baseDimension * 0.36).clamp(84.0, 110.0);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1103,76 +924,22 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            DiceWidget(
-              value: _currentValues[0],
-              theme: _theme,
-              size: size,
-              rotationX: _rotX,
-              rotationY: _rotY,
-              rotationZ: _rotZ,
-              elevation: _isRolling ? 20.0 : 10.0,
-              isRolling: _isRolling,
-            ),
+            _buildSingleDie(index: 0, size: size),
             const SizedBox(width: 8),
-            DiceWidget(
-              value: _currentValues[1],
-              theme: _theme,
-              size: size,
-              rotationX: -_rotY * 0.85,
-              rotationY: _rotX * 1.05,
-              rotationZ: -_rotZ * 0.9,
-              elevation: _isRolling ? 20.0 : 10.0,
-              isRolling: _isRolling,
-            ),
+            _buildSingleDie(index: 1, size: size),
             const SizedBox(width: 8),
-            DiceWidget(
-              value: _currentValues[2],
-              theme: _theme,
-              size: size,
-              rotationX: _rotZ * 0.9,
-              rotationY: -_rotX * 0.95,
-              rotationZ: _rotY * 1.1,
-              elevation: _isRolling ? 20.0 : 10.0,
-              isRolling: _isRolling,
-            ),
+            _buildSingleDie(index: 2, size: size),
           ],
         ),
         const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            DiceWidget(
-              value: _currentValues[3],
-              theme: _theme,
-              size: size,
-              rotationX: -_rotX * 1.05,
-              rotationY: -_rotZ * 0.9,
-              rotationZ: _rotX * 0.95,
-              elevation: _isRolling ? 20.0 : 10.0,
-              isRolling: _isRolling,
-            ),
+            _buildSingleDie(index: 3, size: size),
             const SizedBox(width: 8),
-            DiceWidget(
-              value: _currentValues[4],
-              theme: _theme,
-              size: size,
-              rotationX: _rotY * 0.95,
-              rotationY: _rotZ * 0.95,
-              rotationZ: -_rotX * 0.9,
-              elevation: _isRolling ? 20.0 : 10.0,
-              isRolling: _isRolling,
-            ),
+            _buildSingleDie(index: 4, size: size),
             const SizedBox(width: 8),
-            DiceWidget(
-              value: _currentValues[5],
-              theme: _theme,
-              size: size,
-              rotationX: -_rotZ * 1.0,
-              rotationY: _rotX * 0.9,
-              rotationZ: -_rotY * 1.0,
-              elevation: _isRolling ? 20.0 : 10.0,
-              isRolling: _isRolling,
-            ),
+            _buildSingleDie(index: 5, size: size),
           ],
         ),
       ],
@@ -1586,3 +1353,18 @@ class _VoiceStatusPill extends StatelessWidget {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Die Continuous Spin Trajectory
+// ──────────────────────────────────────────────────────────────────────────────
+
+class _DieSpinTrajectory {
+  final double totalRotX;
+  final double totalRotY;
+  final double totalRotZ;
+
+  const _DieSpinTrajectory({
+    required this.totalRotX,
+    required this.totalRotY,
+    required this.totalRotZ,
+  });
+}

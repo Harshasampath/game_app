@@ -29,6 +29,26 @@ class DiceWidget extends StatefulWidget {
     this.isRolling = false,
   });
 
+  /// Base rotation angles that bring face `value` to the front (+Z camera view)
+  static (double, double, double) baseRotationForValue(int val) {
+    switch (val) {
+      case 1:
+        return (0.0, 0.0, 0.0);
+      case 6:
+        return (0.0, math.pi, 0.0);
+      case 2:
+        return (0.0, -math.pi / 2, 0.0);
+      case 5:
+        return (0.0, math.pi / 2, 0.0);
+      case 3:
+        return (-math.pi / 2, 0.0, 0.0);
+      case 4:
+        return (math.pi / 2, 0.0, 0.0);
+      default:
+        return (0.0, 0.0, 0.0);
+    }
+  }
+
   @override
   State<DiceWidget> createState() => _DiceWidgetState();
 }
@@ -147,26 +167,6 @@ class _GlbDicePainter extends CustomPainter {
     required this.isRolling,
   });
 
-  // Base rotation angles that bring face `value` to the front (+Z camera view)
-  static (double, double, double) _baseRotationForValue(int val) {
-    switch (val) {
-      case 1:
-        return (0.0, 0.0, 0.0);
-      case 6:
-        return (0.0, math.pi, 0.0);
-      case 2:
-        return (0.0, -math.pi / 2, 0.0);
-      case 5:
-        return (0.0, math.pi / 2, 0.0);
-      case 3:
-        return (-math.pi / 2, 0.0, 0.0);
-      case 4:
-        return (math.pi / 2, 0.0, 0.0);
-      default:
-        return (0.0, 0.0, 0.0);
-    }
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
@@ -177,7 +177,7 @@ class _GlbDicePainter extends CustomPainter {
     final fl = size.width * 2.0;
 
     // Base rotation to show the current face value
-    final (baseX, baseY, baseZ) = _baseRotationForValue(value);
+    final (baseX, baseY, baseZ) = DiceWidget.baseRotationForValue(value);
 
     // Dynamic rotation during rolling
     final totalRotX = baseX + rotationX;
