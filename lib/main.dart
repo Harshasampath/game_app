@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:game_app/games/nebula_strike/nebula_strike_screen.dart';
@@ -41,34 +42,29 @@ class GamesList extends StatelessWidget {
     final games = [
       {
         'name': 'Shuffle Dice',
+        'asset': 'assets/images/dice_rolling.svg',
         'badge': 'FOOD CHALLENGE',
-        'icon': Icons.casino_rounded,
-        'colors': [const Color(0xFFD90429), const Color(0xFFFF8500), const Color(0xFFFFB703)],
         'widget': const ShuffleDiceScreen(),
       },
       {
         'name': 'Nebula Strike',
+        'asset': 'assets/images/nubula_stike.svg',
         'badge': 'ARCADE • 2D',
-        'icon': Icons.rocket_launch_rounded,
-        'colors': [const Color(0xFF060A14), const Color(0xFF1E3A8A), const Color(0xFF38BDF8)],
         'widget': const NebulaStrikeScreen(),
       },
       {
         'name': 'Tic Tac Toe',
-        'icon': Icons.grid_3x3_rounded,
-        'colors': [Colors.indigo.shade400, Colors.indigo.shade700],
+        'asset': 'assets/images/tic_tac_roe.svg',
         'widget': const TicTacToeGame(),
       },
       {
         'name': 'Memory Cards',
-        'icon': Icons.style_rounded,
-        'colors': [Colors.teal.shade400, Colors.teal.shade700],
+        'asset': 'assets/images/memory_cards.svg',
         'widget': const MemoryGame(),
       },
       {
         'name': 'Number Puzzles',
-        'icon': Icons.pin_rounded,
-        'colors': [Colors.purple.shade400, Colors.purple.shade700],
+        'asset': 'assets/images/number_puzzeles.svg',
         'widget': const NumberPuzzleGame(),
       },
       {
@@ -79,20 +75,17 @@ class GamesList extends StatelessWidget {
       },
       {
         'name': 'Color Memory Matching',
-        'icon': Icons.palette_rounded,
-        'colors': [Colors.pink.shade400, const Color(0xFFBE185D)],
+        'asset': 'assets/images/color_memory_matching.svg',
         'widget': const ColorMemoryGame(),
       },
       {
         'name': 'Obstacle Dodger',
-        'icon': Icons.directions_car_rounded,
-        'colors': [Colors.blue.shade500, Colors.blue.shade800],
+        'asset': 'assets/images/obstacle_dodger.svg',
         'widget': const ObstacleDodger(),
       },
       {
         'name': 'Bubble Shooter Game',
-        'icon': Icons.bubble_chart_rounded,
-        'colors': [Colors.cyan.shade500, Colors.cyan.shade800],
+        'asset': 'assets/images/bubble_shooter.svg',
         'widget': const BubbleShooterGame(),
       },
     ];
@@ -113,6 +106,7 @@ class GamesList extends StatelessWidget {
           final game = games[index];
           return GameCard(
             title: game['name'] as String,
+            asset: game['asset'] as String?,
             icon: game['icon'] as IconData?,
             badge: game['badge'] as String?,
             gradientColors: game['colors'] as List<Color>?,
@@ -130,6 +124,7 @@ class GamesList extends StatelessWidget {
 class GameCard extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
+  final String? asset;
   final IconData? icon;
   final String? badge;
   final List<Color>? gradientColors;
@@ -138,6 +133,7 @@ class GameCard extends StatelessWidget {
     Key? key,
     required this.title,
     required this.onTap,
+    this.asset,
     this.icon,
     this.badge,
     this.gradientColors,
@@ -147,58 +143,92 @@ class GameCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: gradientColors ?? [Colors.blue.shade300, Colors.blue.shade600],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 36, color: Colors.white),
-                const SizedBox(height: 8),
-              ],
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (badge != null) ...[
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white30, width: 0.8),
+        child: asset != null
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  SvgPicture.asset(
+                    asset!,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
                   ),
-                  child: Text(
-                    badge!,
-                    style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 0.8,
+                  if (badge != null)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white30, width: 0.8),
+                        ),
+                        child: Text(
+                          badge!,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
                     ),
+                ],
+              )
+            : Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: gradientColors ?? [Colors.blue.shade300, Colors.blue.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-              ],
-            ],
-          ),
-        ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, size: 36, color: Colors.white),
+                      const SizedBox(height: 8),
+                    ],
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (badge != null) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white30, width: 0.8),
+                        ),
+                        child: Text(
+                          badge!,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
       ),
     );
   }
