@@ -21,10 +21,15 @@ class DiceSettingsSheet extends StatelessWidget {
   final bool cleanMode;
   final ValueChanged<bool> onCleanModeChanged;
 
+  final int diceCount;
+  final ValueChanged<int> onDiceCountChanged;
+
   final Color accentColor;
 
   const DiceSettingsSheet({
     super.key,
+    this.diceCount = 1,
+    required this.onDiceCountChanged,
     this.shuffleDuration = 2.0,
     required this.onShuffleDurationChanged,
     this.shuffleSpeed = ShuffleSpeed.normal,
@@ -135,6 +140,151 @@ class DiceSettingsSheet extends StatelessWidget {
               ),
 
               const SizedBox(height: 18),
+
+              // ── 0. Number of Dice (1 to 6) ──────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            Icons.casino_rounded,
+                            color: accentColor,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Number of Dice',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                diceCount == 1
+                                    ? '1 die shuffling at once'
+                                    : '$diceCount dice shuffling simultaneously',
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.20),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: accentColor.withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            diceCount == 1 ? '1 DIE' : '$diceCount DICE',
+                            style: TextStyle(
+                              color: accentColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: List.generate(6, (i) {
+                        final count = i + 1;
+                        final isSelected = count == diceCount;
+                        return Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              left: i == 0 ? 0 : 3,
+                              right: i == 5 ? 0 : 3,
+                            ),
+                            child: InkWell(
+                              onTap: () => onDiceCountChanged(count),
+                              borderRadius: BorderRadius.circular(12),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? accentColor
+                                      : Colors.white.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? accentColor
+                                        : Colors.white.withValues(alpha: 0.15),
+                                    width: isSelected ? 1.5 : 1,
+                                  ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: accentColor.withValues(alpha: 0.4),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          )
+                                        ]
+                                      : null,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.casino_outlined,
+                                      size: 16,
+                                      color: isSelected ? Colors.white : Colors.white60,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$count',
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.white : Colors.white70,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
 
               // ── 1. Shuffle Duration Adjustment Slider ──────────────────────
               Container(

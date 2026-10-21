@@ -26,6 +26,7 @@ enum ShuffleSpeed {
 class DiceSettings {
   final DiceThemeData theme;
   final ShuffleSpeed shuffleSpeed;
+  final int diceCount;
   final bool foodChallengeEnabled;
   final Map<int, String> foodRules;
   final double shuffleDuration;
@@ -36,6 +37,7 @@ class DiceSettings {
   const DiceSettings({
     required this.theme,
     required this.shuffleSpeed,
+    this.diceCount = 1,
     this.shuffleDuration = 2.0,
     required this.foodChallengeEnabled,
     required this.foodRules,
@@ -48,6 +50,7 @@ class DiceSettings {
     return DiceSettings(
       theme: DiceThemeData.presets[0],
       shuffleSpeed: ShuffleSpeed.normal,
+      diceCount: 1,
       shuffleDuration: 2.0,
       foodChallengeEnabled: true,
       foodRules: Map.from(FoodChallengePreset.presets[0].rules),
@@ -64,6 +67,7 @@ class DiceSettings {
 class DiceSettingsService {
   static const String _kThemeKey = 'shuffle_dice_theme_data';
   static const String _kSpeedKey = 'shuffle_dice_speed_mode';
+  static const String _kDiceCountKey = 'shuffle_dice_count';
   static const String _kFoodEnabledKey = 'shuffle_dice_food_enabled';
   static const String _kFoodRulesKey = 'shuffle_dice_food_rules_map';
   static const String _kDurationKey = 'shuffle_dice_duration_seconds';
@@ -101,6 +105,9 @@ class DiceSettingsService {
       // Shuffle duration
       final duration = prefs.getDouble(_kDurationKey) ?? 2.0;
 
+      // Dice count (1..6)
+      final diceCount = (prefs.getInt(_kDiceCountKey) ?? 1).clamp(1, 6);
+
       // Food Challenge Enabled
       final foodEnabled = prefs.getBool(_kFoodEnabledKey) ?? true;
 
@@ -131,6 +138,7 @@ class DiceSettingsService {
       return DiceSettings(
         theme: theme,
         shuffleSpeed: speed,
+        diceCount: diceCount,
         shuffleDuration: duration,
         foodChallengeEnabled: foodEnabled,
         foodRules: rules,
@@ -156,6 +164,14 @@ class DiceSettingsService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kSpeedKey, speed.name);
+    } catch (_) {}
+  }
+
+  /// Save the number of dice (1..6)
+  static Future<void> saveDiceCount(int count) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kDiceCountKey, count.clamp(1, 6));
     } catch (_) {}
   }
 

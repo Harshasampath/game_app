@@ -29,9 +29,14 @@ class ShuffleDiceScreen extends StatefulWidget {
 class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     with TickerProviderStateMixin {
   // ── Dice State ──────────────────────────────────────────────────────────────
+  int _diceCount = 1;
+  List<int> _currentValues = [1];
+  List<int> _targetValues = [1];
   int _currentValue = 1;
   int _targetValue = 1;
   bool _isRolling = false;
+
+  int get _totalSum => _currentValues.fold(0, (a, b) => a + b);
 
   // ── Settings (Sound, Vibration, Voice, Clean Screen Mode) ───────────────────
   bool _soundEnabled = true;
@@ -95,7 +100,10 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
   @override
   void initState() {
     super.initState();
-    _currentValue = _random.nextInt(6) + 1;
+    _diceCount = 1;
+    _currentValues = [_random.nextInt(6) + 1];
+    _targetValues = List.from(_currentValues);
+    _currentValue = _currentValues.first;
     _targetValue = _currentValue;
     _updateChallengeResult(_currentValue);
 
@@ -131,6 +139,11 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       _theme = settings.theme;
       _shuffleSpeed = settings.shuffleSpeed;
       _shuffleDuration = settings.shuffleDuration;
+      _diceCount = settings.diceCount;
+      _currentValues = List.generate(_diceCount, (_) => _random.nextInt(6) + 1);
+      _targetValues = List.from(_currentValues);
+      _currentValue = _currentValues.first;
+      _targetValue = _targetValues.first;
       _foodChallengeEnabled = settings.foodChallengeEnabled;
       _foodRules = settings.foodRules;
       _soundEnabled = settings.soundEnabled;
@@ -256,7 +269,8 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
 
   void _updateChallengeResult(int value) {
     if (_foodChallengeEnabled) {
-      _lastChallengeResult = _foodRules[value] ?? 'Challenge #$value';
+      final key = _diceCount > 1 ? ((_totalSum - 1) % 6 + 1) : value;
+      _lastChallengeResult = _foodRules[key] ?? 'Challenge #$key';
     } else {
       _lastChallengeResult = null;
     }
@@ -341,7 +355,8 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       } catch (_) {}
     }
 
-    _targetValue = _random.nextInt(6) + 1;
+    _targetValues = List.generate(_diceCount, (_) => _random.nextInt(6) + 1);
+    _targetValue = _targetValues.first;
     _isRolling = true;
 
     // Random landing rotation
@@ -380,7 +395,10 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
     // ── Face flip (randomize until last tick) ──────────────────────────────
     final isLastTick = _ticksRemaining <= 0;
     setState(() {
-      _currentValue = isLastTick ? _targetValue : (_random.nextInt(6) + 1);
+      _currentValues = isLastTick
+          ? List.from(_targetValues)
+          : List.generate(_diceCount, (_) => _random.nextInt(6) + 1);
+      _currentValue = _currentValues.first;
 
       // ── 3D Rotation: spin full rotations at start, dampen toward end ──────
       final spinFactor = (1.0 - progress) * 2 * math.pi;
@@ -444,6 +462,29 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
       builder: (_) => StatefulBuilder(
         builder: (context, setSheetState) {
           return DiceSettingsSheet(
+            diceCount: _diceCount,
+            onDiceCountChanged: (val) {
+              setSheetState(() => _diceCount = val);
+              setState(() {
+                _diceCount = val;
+                if (_currentValues.length < _diceCount) {
+                  _currentValues = List.generate(
+                    _diceCount,
+                    (i) => i < _currentValues.length
+                        ? _currentValues[i]
+                        : _random.nextInt(6) + 1,
+                  );
+                  _targetValues = List.from(_currentValues);
+                } else if (_currentValues.length > _diceCount) {
+                  _currentValues = _currentValues.sublist(0, _diceCount);
+                  _targetValues = _targetValues.sublist(0, _diceCount);
+                }
+                _currentValue = _currentValues.first;
+                _targetValue = _targetValues.first;
+                _updateChallengeResult(_currentValue);
+              });
+              DiceSettingsService.saveDiceCount(val);
+            },
             shuffleDuration: _shuffleDuration,
             onShuffleDurationChanged: (val) {
               setSheetState(() => _shuffleDuration = val);
@@ -587,7 +628,7 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                       // Food Challenge Banner
                       if (!_cleanMode && _foodChallengeEnabled && _lastChallengeResult != null)
                         _FoodChallengeBanner(
-                          value: _currentValue,
+                          value: _diceCount == 1 ? _currentValue : ((_totalSum - 1) % 6 + 1),
                           result: _lastChallengeResult!,
                           isRolling: _isRolling,
                         ),
@@ -595,20 +636,11 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                       // Dice
                       Transform.scale(
                         scale: _scale,
-                        child: DiceWidget(
-                          value: _currentValue,
-                          theme: _theme,
-                          size: diceDimension,
-                          rotationX: _rotX,
-                          rotationY: _rotY,
-                          rotationZ: _rotZ,
-                          elevation: _isRolling ? 32.0 : 16.0,
-                          isRolling: _isRolling,
-                        ),
+                        child: _buildDiceArea(diceDimension),
                       ),
 
                       if (!_cleanMode) ...[
-                        const SizedBox(height: 36),
+                        const SizedBox(height: 32),
 
                         // Status badge
                         AnimatedContainer(
@@ -626,12 +658,18 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
                                     : Colors.white12),
                           ),
                           child: Text(
-                            _isRolling ? 'SHUFFLING...' : 'ROLLED  •  $_currentValue',
+                            _isRolling
+                                ? (_diceCount == 1
+                                    ? 'SHUFFLING...'
+                                    : 'SHUFFLING $_diceCount DICE...')
+                                : (_diceCount == 1
+                                    ? 'ROLLED  •  $_currentValue'
+                                    : 'TOTAL: $_totalSum  •  [${_currentValues.join(", ")}]'),
                             style: TextStyle(
                               color: _isRolling ? _theme.accentColor : Colors.white,
-                              fontSize: 16,
+                              fontSize: _diceCount > 1 ? 14 : 16,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: 2.5,
+                              letterSpacing: _diceCount > 1 ? 1.5 : 2.5,
                             ),
                           ),
                         ),
@@ -834,6 +872,310 @@ class _ShuffleDiceScreenState extends State<ShuffleDiceScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDiceArea(double baseDimension) {
+    if (_diceCount == 1) {
+      return DiceWidget(
+        value: _currentValues[0],
+        theme: _theme,
+        size: baseDimension,
+        rotationX: _rotX,
+        rotationY: _rotY,
+        rotationZ: _rotZ,
+        elevation: _isRolling ? 32.0 : 16.0,
+        isRolling: _isRolling,
+      );
+    }
+
+    if (_diceCount == 2) {
+      final size = (baseDimension * 0.58).clamp(130.0, 165.0);
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          DiceWidget(
+            value: _currentValues[0],
+            theme: _theme,
+            size: size,
+            rotationX: _rotX,
+            rotationY: _rotY,
+            rotationZ: _rotZ,
+            elevation: _isRolling ? 28.0 : 14.0,
+            isRolling: _isRolling,
+          ),
+          const SizedBox(width: 16),
+          DiceWidget(
+            value: _currentValues[1],
+            theme: _theme,
+            size: size,
+            rotationX: -_rotY * 0.9,
+            rotationY: _rotX * 1.1,
+            rotationZ: -_rotZ * 0.85,
+            elevation: _isRolling ? 28.0 : 14.0,
+            isRolling: _isRolling,
+          ),
+        ],
+      );
+    }
+
+    if (_diceCount == 3) {
+      final size = (baseDimension * 0.44).clamp(95.0, 125.0);
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          DiceWidget(
+            value: _currentValues[0],
+            theme: _theme,
+            size: size,
+            rotationX: _rotX,
+            rotationY: _rotY,
+            rotationZ: _rotZ,
+            elevation: _isRolling ? 24.0 : 12.0,
+            isRolling: _isRolling,
+          ),
+          const SizedBox(width: 10),
+          DiceWidget(
+            value: _currentValues[1],
+            theme: _theme,
+            size: size,
+            rotationX: -_rotY * 0.85,
+            rotationY: _rotX * 1.05,
+            rotationZ: -_rotZ * 0.9,
+            elevation: _isRolling ? 24.0 : 12.0,
+            isRolling: _isRolling,
+          ),
+          const SizedBox(width: 10),
+          DiceWidget(
+            value: _currentValues[2],
+            theme: _theme,
+            size: size,
+            rotationX: _rotZ * 0.9,
+            rotationY: -_rotX * 0.95,
+            rotationZ: _rotY * 1.1,
+            elevation: _isRolling ? 24.0 : 12.0,
+            isRolling: _isRolling,
+          ),
+        ],
+      );
+    }
+
+    if (_diceCount == 4) {
+      final size = (baseDimension * 0.46).clamp(100.0, 130.0);
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              DiceWidget(
+                value: _currentValues[0],
+                theme: _theme,
+                size: size,
+                rotationX: _rotX,
+                rotationY: _rotY,
+                rotationZ: _rotZ,
+                elevation: _isRolling ? 24.0 : 12.0,
+                isRolling: _isRolling,
+              ),
+              const SizedBox(width: 14),
+              DiceWidget(
+                value: _currentValues[1],
+                theme: _theme,
+                size: size,
+                rotationX: -_rotY * 0.9,
+                rotationY: _rotX * 1.1,
+                rotationZ: -_rotZ * 0.85,
+                elevation: _isRolling ? 24.0 : 12.0,
+                isRolling: _isRolling,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              DiceWidget(
+                value: _currentValues[2],
+                theme: _theme,
+                size: size,
+                rotationX: _rotZ * 0.85,
+                rotationY: -_rotX * 0.95,
+                rotationZ: _rotY * 1.05,
+                elevation: _isRolling ? 24.0 : 12.0,
+                isRolling: _isRolling,
+              ),
+              const SizedBox(width: 14),
+              DiceWidget(
+                value: _currentValues[3],
+                theme: _theme,
+                size: size,
+                rotationX: -_rotX * 1.05,
+                rotationY: -_rotZ * 0.9,
+                rotationZ: _rotX * 0.95,
+                elevation: _isRolling ? 24.0 : 12.0,
+                isRolling: _isRolling,
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (_diceCount == 5) {
+      final size = (baseDimension * 0.38).clamp(88.0, 115.0);
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              DiceWidget(
+                value: _currentValues[0],
+                theme: _theme,
+                size: size,
+                rotationX: _rotX,
+                rotationY: _rotY,
+                rotationZ: _rotZ,
+                elevation: _isRolling ? 20.0 : 10.0,
+                isRolling: _isRolling,
+              ),
+              const SizedBox(width: 8),
+              DiceWidget(
+                value: _currentValues[1],
+                theme: _theme,
+                size: size,
+                rotationX: -_rotY * 0.85,
+                rotationY: _rotX * 1.05,
+                rotationZ: -_rotZ * 0.9,
+                elevation: _isRolling ? 20.0 : 10.0,
+                isRolling: _isRolling,
+              ),
+              const SizedBox(width: 8),
+              DiceWidget(
+                value: _currentValues[2],
+                theme: _theme,
+                size: size,
+                rotationX: _rotZ * 0.9,
+                rotationY: -_rotX * 0.95,
+                rotationZ: _rotY * 1.1,
+                elevation: _isRolling ? 20.0 : 10.0,
+                isRolling: _isRolling,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              DiceWidget(
+                value: _currentValues[3],
+                theme: _theme,
+                size: size,
+                rotationX: -_rotX * 1.05,
+                rotationY: -_rotZ * 0.9,
+                rotationZ: _rotX * 0.95,
+                elevation: _isRolling ? 20.0 : 10.0,
+                isRolling: _isRolling,
+              ),
+              const SizedBox(width: 10),
+              DiceWidget(
+                value: _currentValues[4],
+                theme: _theme,
+                size: size,
+                rotationX: _rotY * 0.95,
+                rotationY: _rotZ * 0.95,
+                rotationZ: -_rotX * 0.9,
+                elevation: _isRolling ? 20.0 : 10.0,
+                isRolling: _isRolling,
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // 6 dice (3 on top row, 3 on bottom row)
+    final size = (baseDimension * 0.36).clamp(84.0, 110.0);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            DiceWidget(
+              value: _currentValues[0],
+              theme: _theme,
+              size: size,
+              rotationX: _rotX,
+              rotationY: _rotY,
+              rotationZ: _rotZ,
+              elevation: _isRolling ? 20.0 : 10.0,
+              isRolling: _isRolling,
+            ),
+            const SizedBox(width: 8),
+            DiceWidget(
+              value: _currentValues[1],
+              theme: _theme,
+              size: size,
+              rotationX: -_rotY * 0.85,
+              rotationY: _rotX * 1.05,
+              rotationZ: -_rotZ * 0.9,
+              elevation: _isRolling ? 20.0 : 10.0,
+              isRolling: _isRolling,
+            ),
+            const SizedBox(width: 8),
+            DiceWidget(
+              value: _currentValues[2],
+              theme: _theme,
+              size: size,
+              rotationX: _rotZ * 0.9,
+              rotationY: -_rotX * 0.95,
+              rotationZ: _rotY * 1.1,
+              elevation: _isRolling ? 20.0 : 10.0,
+              isRolling: _isRolling,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            DiceWidget(
+              value: _currentValues[3],
+              theme: _theme,
+              size: size,
+              rotationX: -_rotX * 1.05,
+              rotationY: -_rotZ * 0.9,
+              rotationZ: _rotX * 0.95,
+              elevation: _isRolling ? 20.0 : 10.0,
+              isRolling: _isRolling,
+            ),
+            const SizedBox(width: 8),
+            DiceWidget(
+              value: _currentValues[4],
+              theme: _theme,
+              size: size,
+              rotationX: _rotY * 0.95,
+              rotationY: _rotZ * 0.95,
+              rotationZ: -_rotX * 0.9,
+              elevation: _isRolling ? 20.0 : 10.0,
+              isRolling: _isRolling,
+            ),
+            const SizedBox(width: 8),
+            DiceWidget(
+              value: _currentValues[5],
+              theme: _theme,
+              size: size,
+              rotationX: -_rotZ * 1.0,
+              rotationY: _rotX * 0.9,
+              rotationZ: -_rotY * 1.0,
+              elevation: _isRolling ? 20.0 : 10.0,
+              isRolling: _isRolling,
+            ),
+          ],
+        ),
+      ],
     );
   }
 
