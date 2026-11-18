@@ -8,6 +8,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:game_app/games/nebula_strike/nebula_strike_screen.dart';
 import 'package:game_app/games/shuffle_dice/shuffle_dice_screen.dart';
+import 'package:game_app/utilities/voyager_signal/voyager_signal_screen.dart';
 
 void main() {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +41,13 @@ class GamesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final games = [
+      {
+        'name': 'Voyager Signal',
+        'icon': Icons.satellite_alt_rounded,
+        'colors': [const Color(0xFF253658), const Color(0xFF090F1E)],
+        'badge': 'MORSE • FLASHLIGHT',
+        'widget': const VoyagerSignalScreen(),
+      },
       {
         'name': 'Shuffle Dice',
         'asset': 'assets/images/dice_rolling.svg',

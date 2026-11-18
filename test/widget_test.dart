@@ -10,10 +10,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:game_app/main.dart';
 
 void main() {
-  testWidgets('MiniGamesApp loads and displays Nebula Strike and Shuffle Dice', (WidgetTester tester) async {
+  testWidgets('MiniGamesApp loads and displays Nebula Strike and Shuffle Dice',
+      (WidgetTester tester) async {
     await tester.pumpWidget(const MiniGamesApp());
     expect(find.text('Mini Games Collection'), findsOneWidget);
-    expect(find.text('Nebula Strike'), findsOneWidget);
-    expect(find.text('Shuffle Dice'), findsOneWidget);
+    // Artwork cards render their labels inside SVG assets, not Text widgets.
+    expect(
+        find.byWidgetPredicate(
+            (widget) => widget is GameCard && widget.title == 'Nebula Strike'),
+        findsOneWidget);
+    expect(
+        find.byWidgetPredicate(
+            (widget) => widget is GameCard && widget.title == 'Shuffle Dice'),
+        findsOneWidget);
+    expect(find.text('Voyager Signal'), findsOneWidget);
+    await tester.tap(find.text('Voyager Signal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Thank you, Voyager.'), findsOneWidget);
   });
 }
